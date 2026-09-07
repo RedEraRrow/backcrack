@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+"""sortd.py - watches UNSORTED/ and files discs into their pattern-resolved
+destination as soon as they become resolvable (you added a labels.map line,
+or the parser improved). Merges a split disc back together if one ever occurs.
+
+    ./sortd.py              daemon, polls every 5s
+    ONCE=1 ./sortd.py       single pass
+    DRYRUN=1 ./sortd.py     say what it would do, change nothing
+"""
+import os
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from backcrack import config as cfg
+from backcrack.sort import reconcile, SORTLOG
+from backcrack.lib import log
+
+INTERVAL = int(os.environ.get("INTERVAL", 5))
+
+
+def main() -> None:
+    dry_run = bool(os.environ.get("DRYRUN"))
+    once = bool(os.environ.get("ONCE")) or dry_run
+
+    if once:
+        reconcile(dry_run=dry_run)
+        return
+
+    log(SORTLOG, f"sortd started - polling UNSORTED every {INTERVAL}s")
+    print(f"Watching UNSORTED. Add a labels.map line and it files itself within {INTERVAL}s.")
+    try:
+        while True:
+            reconcile()
+            time.sleep(INTERVAL)
+    except KeyboardInterrupt:
+        print("\nsorter stopped")
+
+
+if __name__ == "__main__":
+    main()

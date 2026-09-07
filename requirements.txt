@@ -1,0 +1,7 @@
+# No third-party packages - stdlib only (Python 3.9+).
+#
+# External binaries (not pip packages, install via Homebrew):
+#   makemkvcon, HandBrakeCLI   - DVD/Blu-ray
+#   cdparanoia                 - audio CD
+#   flac (or ffmpeg)           - audio compression
+#   cd-discid                  - optional, audio CD auto-identification

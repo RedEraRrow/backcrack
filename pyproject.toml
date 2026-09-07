@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "backcrack"
+version = "0.1.0"
+description = "CD/DVD/Blu-ray rip pipeline - MakeMKV/HandBrake for video, cdparanoia for audio, dynamic %token% library patterning."
+requires-python = ">=3.9"
+# Not on PyPI yet - installed from its sibling checkout. Swap for
+# "backbone @ git+https://github.com/<user>/backbone.git" once that repo
+# exists. If backbone is already installed (e.g. because backtrack pulled
+# it in first), pip sees the requirement already satisfied and leaves it -
+# this is what makes it install only once when both packages are present.
+dependencies = ["backbone @ file:///Users/local/backbone"]
+
+[project.scripts]
+backcrack = "cli:main"
+ripd = "ripd:main"
+encd = "encd:main"
+sortd = "sortd:main"
+watch = "watch:main"
+status = "status:main"
+swapd = "swapd:main"
+titles = "titles:main"
+diskspeed = "diskspeed:main"
+
+[tool.setuptools]
+packages = ["backcrack"]
+py-modules = ["cli", "ripd", "encd", "sortd", "watch", "status", "swapd", "titles", "diskspeed"]

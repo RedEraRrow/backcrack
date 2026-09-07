@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+"""cli.py - single entry point. Bare `backcrack` starts ripd + encd in the
+background and opens the live TUI - everything you need for a morning of
+ripping, one command. Toggle LAUNCH_RIPD / LAUNCH_ENCD / LAUNCH_WATCH in
+backcrack/config.py (or as env vars) to run any of them by hand instead.
+
+    backcrack             ripd + encd in the background, then the live TUI
+    backcrack ripd
+    backcrack encd
+    backcrack status
+    backcrack watch
+    backcrack sortd
+    backcrack swapd
+    backcrack titles "/path/to/disc"
+    backcrack diskspeed
+
+Settings are unchanged - still env vars read by backcrack/config.py
+(LIBRARY=, RIP_MODE=, etc.), same as running each tool directly:
+
+    LIBRARY=~/Media/rips backcrack ripd
+"""
+import argparse
+import subprocess
+import sys
+from pathlib import Path
+
+import diskspeed
+import encd
+import ripd
+import sortd
+import status
+import swapd
+import titles
+import watch
+from backcrack import config as cfg
+
+HERE = Path(__file__).resolve().parent
+
+COMMANDS = {
+    "ripd": ripd.main,
+    "encd": encd.main,
+    "sortd": sortd.main,
+    "watch": watch.main,
+    "status": status.main,
+    "swapd": swapd.main,
+    "titles": titles.main,
+    "diskspeed": diskspeed.main,
+}
+
+
+def _running(pattern: str) -> bool:
+    return subprocess.run(["pgrep", "-f", pattern], capture_output=True).returncode == 0
+
+
+def _spawn(script: str) -> None:
+    out = cfg.STATE / f"{script.removesuffix('.py')}.out"
+    subprocess.Popen([sys.executable, str(HERE / script)],
+                      stdout=open(out, "ab"), stderr=subprocess.STDOUT)
+
+
+def launch_all() -> None:
+    started = []
+    if cfg.LAUNCH_RIPD and not _running("ripd.py"):
+        _spawn("ripd.py")
+        started.append("ripd")
+    if cfg.LAUNCH_ENCD and not _running("encd.py"):
+        _spawn("encd.py")
+        started.append("encd")
+
+    if cfg.LAUNCH_WATCH:
+        watch.main()
+        return
+
+    if started:
+        print(f"{' + '.join(started)} launched in the background - logs in {cfg.STATE}/*.out")
+    print("`backcrack watch` to view, `backcrack status` to check.")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(prog="backcrack", description=__doc__,
+                                      formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("command", choices=COMMANDS, nargs="?", default=None)
+    parser.add_argument("args", nargs=argparse.REMAINDER)
+    parsed = parser.parse_args()
+
+    if parsed.command is None:
+        launch_all()
+        return
+
+    sys.argv = [parsed.command] + parsed.args
+    COMMANDS[parsed.command]()
+
+
+if __name__ == "__main__":
+    main()

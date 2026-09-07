@@ -1,0 +1,13 @@
+# Manual overrides, for discs the auto-detection can't place.
+# One per line:   LABEL|key=value,key=value,...
+# LABEL is the disc's volume label exactly as it appears in the log (video),
+# or the value ripd.sh logged for an unidentified audio CD.
+#
+# The keys you provide must match whatever %tokens% PATTERN_VIDEO or
+# PATTERN_AUDIO reference in config.sh. See docs/pattern-tokens.md.
+#
+# Video example (default pattern wants season, disc):
+# SOME_WEIRD_LABEL|season=2,disc=5
+#
+# Audio example (default pattern wants artist, album):
+# AudioCD-14tracks-1234567890|artist=Pixies,album=Doolittle
