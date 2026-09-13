@@ -26,6 +26,7 @@ from pathlib import Path
 
 import diskspeed
 import encd
+import namer
 import ripd
 import sortd
 import status
@@ -45,11 +46,18 @@ COMMANDS = {
     "swapd": swapd.main,
     "titles": titles.main,
     "diskspeed": diskspeed.main,
+    "namer": namer.main,
 }
 
 
-def _running(pattern: str) -> bool:
-    return subprocess.run(["pgrep", "-f", pattern], capture_output=True).returncode == 0
+def _running(name: str) -> bool:
+    """True if `name`.py (this spawns it that way) OR its `backcrack <name>`
+    console-script form (a user can also start it that way directly) is
+    already running - matching only "ripd.py" used to miss a "backcrack
+    ripd" instance entirely, so launch_all() would spawn a second one that
+    raced the first for the same drive.
+    """
+    return subprocess.run(["pgrep", "-f", f"{name}.py|backcrack {name}"], capture_output=True).returncode == 0
 
 
 def _spawn(script: str) -> None:
@@ -60,10 +68,10 @@ def _spawn(script: str) -> None:
 
 def launch_all() -> None:
     started = []
-    if cfg.LAUNCH_RIPD and not _running("ripd.py"):
+    if cfg.LAUNCH_RIPD and not _running("ripd"):
         _spawn("ripd.py")
         started.append("ripd")
-    if cfg.LAUNCH_ENCD and not _running("encd.py"):
+    if cfg.LAUNCH_ENCD and not _running("encd"):
         _spawn("encd.py")
         started.append("encd")
 
