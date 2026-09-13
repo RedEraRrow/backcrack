@@ -11,3 +11,10 @@
 #
 # Audio example (default pattern wants artist, album):
 # AudioCD-14tracks-1234567890|artist=Pixies,album=Doolittle
+# "G7_..." turned out to be Season 8, not 7 - despite the label.
+G7_65971D5|season=8,disc=5
+G7_65971D6|season=8,disc=6
+G7_65971D1|season=8,disc=1
+G7_65971D2|season=8,disc=2
+G7_65971D3|season=8,disc=3
+G7_65971D4|season=8,disc=4

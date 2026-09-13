@@ -12,7 +12,7 @@ requires-python = ">=3.9"
 # exists. If backbone is already installed (e.g. because backtrack pulled
 # it in first), pip sees the requirement already satisfied and leaves it -
 # this is what makes it install only once when both packages are present.
-dependencies = ["backbone @ file:///Users/local/backbone"]
+dependencies = ["backbone @ file:///Users/local/backpack/backbone"]
 
 [project.scripts]
 backcrack = "cli:main"
@@ -24,7 +24,8 @@ status = "status:main"
 swapd = "swapd:main"
 titles = "titles:main"
 diskspeed = "diskspeed:main"
+namer = "namer:main"
 
 [tool.setuptools]
 packages = ["backcrack"]
-py-modules = ["cli", "ripd", "encd", "sortd", "watch", "status", "swapd", "titles", "diskspeed"]
+py-modules = ["cli", "ripd", "encd", "sortd", "watch", "status", "swapd", "titles", "diskspeed", "namer"]

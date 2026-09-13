@@ -1,0 +1,198 @@
+# episodes.map - verified episode titles per season, in broadcast order.
+# One line per episode; a "# Season N" header starts each block. Source:
+# Wikipedia "List of House episodes" (checked 2026-09-07) - titles only,
+# renaming assumes disc/title order matches broadcast order (the standard
+# convention for an R1 season box set). namer.py refuses to touch a season
+# whose encoded-file count doesn't exactly match this list's length.
+
+# Season 1
+Pilot
+Paternity
+Occam's Razor
+Maternity
+Damned If You Do
+The Socratic Method
+Fidelity
+Poison
+DNR
+Histories
+Detox
+Sports Medicine
+Cursed
+Control
+Mob Rules
+Heavy
+Role Model
+Babies & Bathwater
+Kids
+Love Hurts
+Three Stories
+Honeymoon
+
+# Season 2
+Acceptance
+Autopsy
+Humpty Dumpty
+TB or Not TB
+Daddy's Boy
+Spin
+Hunting
+The Mistake
+Deception
+Failure to Communicate
+Need to Know
+Distractions
+Skin Deep
+Sex Kills
+Clueless
+Safe
+All In
+Sleeping Dogs Lie
+House vs. God
+Euphoria (Part 1)
+Euphoria (Part 2)
+Forever
+Who's Your Daddy?
+No Reason
+
+# Season 3
+Meaning
+Cane and Able
+Informed Consent
+Lines in the Sand
+Fools for Love
+Que Sera Sera
+Son of Coma Guy
+Whac-A-Mole
+Finding Judas
+Merry Little Christmas
+Words and Deeds
+One Day, One Room
+Needle in a Haystack
+Insensitive
+Half-Wit
+Top Secret
+Fetal Position
+Airborne
+Act Your Age
+House Training
+Family
+Resignation
+The Jerk
+Human Error
+
+# Season 4
+Alone
+The Right Stuff
+97 Seconds
+Guardian Angels
+Mirror Mirror
+Whatever It Takes
+Ugly
+You Don't Want to Know
+Games
+It's a Wonderful Lie
+Frozen
+Don't Ever Change
+No More Mr. Nice Guy
+Living the Dream
+House's Head
+Wilson's Heart
+
+# Season 5
+Dying Changes Everything
+Not Cancer
+Adverse Events
+Birthmarks
+Lucky Thirteen
+Joy
+The Itch
+Emancipation
+Last Resort
+Let Them Eat Cake
+Joy to the World
+Painless
+Big Baby
+The Greater Good
+Unfaithful
+The Softer Side
+The Social Contract
+Here Kitty
+Locked In
+Simple Explanation
+Saviors
+House Divided
+Under My Skin
+Both Sides Now
+
+# Season 6
+Broken
+Epic Fail
+The Tyrant
+Instant Karma
+Brave Heart
+Known Unknowns
+Teamwork
+Ignorance Is Bliss
+Wilson
+The Down Low
+Remorse
+Moving the Chains
+5 to 9
+Private Lives
+Black Hole
+Lockdown
+Knight Fall
+Open and Shut
+The Choice
+Baggage
+Help Me
+
+# Season 7
+Now What?
+Selfish
+Unwritten
+Massage Therapy
+Unplanned Parenthood
+Office Politics
+A Pox on Our House
+Small Sacrifices
+Larger Than Life
+Carrot or Stick
+Family Practice
+You Must Remember This
+Two Stories
+Recession Proof
+Bombshells
+Out of the Chute
+Fall from Grace
+The Dig
+Last Temptation
+Changes
+The Fix
+After Hours
+Moving On
+
+# Season 8
+Twenty Vicodin
+Transplant
+Charity Case
+Risky Business
+The Confession
+Parents
+Dead & Buried
+Perils of Paranoia
+Better Half
+Runaways
+Nobody's Fault
+Chase
+Man of the House
+Love Is Blind
+Blowing the Whistle
+Gut Check
+We Need the Eggs
+Body & Soul
+The C-Word
+Post Mortem
+Holding On
+Everybody Dies
