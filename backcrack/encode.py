@@ -18,6 +18,7 @@ def encode_video_one(src: str, title, out: Path, quality: str) -> int:
         "-o", str(out),
         "--format", "av_mkv",
         "--encoder", cfg.VIDEO_ENCODER, "--encoder-preset", cfg.ENCODER_PRESET, "--quality", quality,
+        "-x", f"threads={cfg.ENCODE_THREADS}",
         *cfg.DEINTERLACE_ARGS,
         "--all-audio", "--aencoder", "copy", "--audio-fallback", "ca_aac",
         "--all-subtitles", "--markers",

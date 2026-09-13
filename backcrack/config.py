@@ -8,13 +8,57 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+HERE = Path(__file__).resolve().parent.parent
+# Settings changed from `backcrack watch`'s settings screen land here rather
+# than in real env vars, so they survive past this process without editing
+# this file. os.environ still wins when set (a one-off `FOO=bar` override
+# stays the escape hatch it always was) - this is just a second, persisted
+# fallback beneath it.
+SETTINGS_FILE = HERE / "settings.env"
+
+
+def _load_settings_file() -> dict:
+    d = {}
+    if SETTINGS_FILE.exists():
+        for line in SETTINGS_FILE.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            d[k.strip()] = v.strip()
+    return d
+
+
+_FILE_SETTINGS = _load_settings_file()
+
 
 def _env(name: str, default: str) -> str:
-    return os.environ.get(name, default)
+    return os.environ.get(name, _FILE_SETTINGS.get(name, default))
 
 
 def _env_int(name: str, default: int) -> int:
-    return int(os.environ.get(name, default))
+    return int(_env(name, str(default)))
+
+
+def save_setting(name: str, value: str) -> None:
+    """Persist one setting to SETTINGS_FILE, replacing its line if already
+    present. Takes effect for any fresh process (ripd/encd need restarting
+    to pick it up, same as every other config change today) - the caller is
+    responsible for also reflecting it into this already-running process's
+    own `cfg` attributes if it needs to show up immediately (see watch.py).
+    """
+    lines = SETTINGS_FILE.read_text().splitlines() if SETTINGS_FILE.exists() else []
+    out, found = [], False
+    for line in lines:
+        if line.split("=", 1)[0].strip() == name:
+            out.append(f"{name}={value}")
+            found = True
+        else:
+            out.append(line)
+    if not found:
+        out.append(f"{name}={value}")
+    SETTINGS_FILE.write_text("\n".join(out) + "\n")
+    _FILE_SETTINGS[name] = value
 
 
 @dataclass(frozen=True)
@@ -54,7 +98,7 @@ NTFY_SERVER = _env("NTFY_SERVER", "https://ntfy.sh")
 # Where finished discs land. The layout beneath this is controlled by
 # PATTERN_VIDEO / PATTERN_AUDIO below, not fixed here - point LIBRARY at
 # whatever you're ripping this run (one show, one CD shelf, a mixed pile).
-LIBRARY = Path(_env("LIBRARY", str(Path.home() / "House (2002)")))
+LIBRARY = Path(_env("LIBRARY", str(Path.home() / "Media" / "TV" / "House (2004)")))
 
 MKVCON = _env("MKVCON", "/Applications/MakeMKV.app/Contents/MacOS/makemkvcon")
 HBCLI = _env("HBCLI", shutil.which("HandBrakeCLI") or "/opt/homebrew/bin/HandBrakeCLI")
@@ -82,8 +126,15 @@ RIP_MODE = _env("RIP_MODE", "titles")
 # Add, remove, resize, or rename classes freely - nothing else in the
 # pipeline hardcodes "main"/"extra"; only "encoded"/"extras" as the stock
 # folder names, which you're free to point elsewhere too.
+# dedup is off by default: it exists for a disc that legitimately lists the
+# same movie twice ("Play Movie" and a separate menu entry, identical
+# content), not for TV - episodes on the same disc naturally cluster around
+# a near-identical runtime (confirmed on a real season: four titles at
+# 2530/2530/2537/2533s, two of them bit-for-bit different files), so
+# duration alone silently drops a real, distinct episode. Add ":dedup" back
+# per class only if you've actually checked your discs list a movie twice.
 DURATION_CLASSES = _parse_duration_classes(_env(
-    "DURATION_CLASSES", "extra:180-1199:extras:22,main:1200-10800:encoded:20:dedup"
+    "DURATION_CLASSES", "extra:180-1199:extras:22,main:1200-10800:encoded:20"
 ))
 
 # Titles shorter than this never get ripped at all (MakeMKV's own
@@ -93,9 +144,29 @@ DURATION_CLASSES = _parse_duration_classes(_env(
 MIN_TITLE_S = _env_int("MIN_TITLE_S", min((c.min_s for c in DURATION_CLASSES), default=180))
 
 # ---- encoding: video -----------------------------------------------------
-ENCODE_JOBS = _env_int("ENCODE_JOBS", 2)
+# Measured on this machine (M1 Pro, 8 performance cores): medium's per-job
+# thread usage means 2 concurrent jobs already saturate it - a 3rd or 4th
+# just adds contention. fast demands far fewer threads per job, so it keeps
+# scaling cleanly through 4 concurrent (~33% faster aggregate throughput
+# than 2x medium, for ~3.6% bigger files at the same constant-quality RF).
+# Re-benchmark (encode a short clip solo vs N-at-once, time it) if you
+# change encoders, presets, or move to different hardware - these numbers
+# are specific to x264 at this preset on this CPU, not a general rule.
+ENCODE_JOBS = _env_int("ENCODE_JOBS", 4)
 VIDEO_ENCODER = _env("VIDEO_ENCODER", "x264")
-ENCODER_PRESET = _env("ENCODER_PRESET", "medium")
+ENCODER_PRESET = _env("ENCODER_PRESET", "fast")
+
+# The benchmark above measured jobs that were ALL concurrent from the start,
+# which isn't the whole picture: a batch's jobs don't all finish together (a
+# 168-minute title takes far longer than a 42-minute one), so a job can end
+# up running solo once its siblings are done. Without a thread cap, x264
+# auto-detects "how many cores are free right now" and a solo job happily
+# grabs every performance core - which starved two concurrent MakeMKV rips
+# of CPU scheduling time entirely (they sat at ~3% CPU, no data written, for
+# over 10 minutes) the first time ENCODE_JOBS=4 actually played out for
+# real. Capping threads per job keeps a fixed ceiling regardless of how many
+# siblings happen to still be running, so ripping always has headroom.
+ENCODE_THREADS = _env_int("ENCODE_THREADS", max(1, (os.cpu_count() or 4) // ENCODE_JOBS))
 
 # Only helps on interlaced sources (older TV masters, some DVD). Leave empty
 # for progressive film/Blu-ray sources - decombing a progressive source can
@@ -132,8 +203,30 @@ PATTERN_AUDIO = _env("PATTERN_AUDIO", "%artist%/%album%")
 # on. A failed disc is deliberately left in the drive so it retries itself.
 MAX_RETRIES = _env_int("MAX_RETRIES", 3)
 
+# ---- settings exposed to `backcrack watch`'s settings screen -------------
+# (env var, type, one-line label). Add a tuple here for any setting above
+# that should be user-editable live - type is "str", "int", "bool", or
+# "path". Nothing else in the pipeline reads this list; it's UI metadata only.
+SETTINGS = [
+    ("LIBRARY", "path", "Library root"),
+    ("RIP_MODE", "str", "Rip mode (titles / video_ts)"),
+    ("DURATION_CLASSES", "str", "Duration classes (name:min-max:folder:quality[:dedup],...)"),
+    ("ENCODE_JOBS", "int", "Concurrent encode jobs"),
+    ("VIDEO_ENCODER", "str", "HandBrake video encoder"),
+    ("ENCODER_PRESET", "str", "HandBrake encoder preset"),
+    ("ENCODE_THREADS", "int", "Threads per encode job"),
+    ("DEINTERLACE_ARGS", "str", "Deinterlace args (blank = off)"),
+    ("AUDIO_FORMAT", "str", "Audio rip format"),
+    ("PATTERN_VIDEO", "str", "Video destination pattern"),
+    ("PATTERN_AUDIO", "str", "Audio destination pattern"),
+    ("MAX_RETRIES", "int", "Max retries before giving up on a disc"),
+    ("NOTIFY_ENCODES", "bool", "Notify on encode complete"),
+    ("LAUNCH_RIPD", "bool", "Bare `backcrack` also launches ripd"),
+    ("LAUNCH_ENCD", "bool", "Bare `backcrack` also launches encd"),
+    ("LAUNCH_WATCH", "bool", "Bare `backcrack` also launches watch"),
+]
+
 # Derived. Don't edit.
-HERE = Path(__file__).resolve().parent.parent
 LABELS_MAP = HERE / "labels.map"
 STATE = LIBRARY / ".ripstate"
 LOGDIR = STATE / "logs"
