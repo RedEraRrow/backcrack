@@ -4,8 +4,9 @@ Insert discs, get pinged, swap discs. Encoding happens on its own in the
 background. Works on CDs, DVDs, and Blu-rays - the disc in the drive tells
 the pipeline which path to take.
 
-Python, stdlib only - no third-party packages needed for the pipeline itself.
-Requires Python 3.9+ (macOS ships one; `python3 --version` to check).
+Python, stdlib only apart from `backbone`, the shared terminal-UI layer the
+back* suite draws itself with - installed from its sibling checkout, not from
+PyPI. Requires Python 3.9+ (macOS ships one; `python3 --version` to check).
 
 ## Install
 
@@ -13,8 +14,8 @@ Installed editable, once, from this directory:
 
     pip3 install -e .
 
-That puts `ripd`, `encd`, `sortd`, `watch`, `status`, `swapd`, `titles` and
-`diskspeed` on your PATH as plain commands - no `./`, no `.py`, no `python3`
+That puts `ripd`, `encd`, `sortd`, `watch`, `status`, `swapd`, `titles`,
+`diskspeed` and `namer` on your PATH as plain commands - no `./`, no `.py`, no `python3`
 in front. It's a live link back to this source tree, so editing any file
 here takes effect immediately, no reinstall.
 
@@ -43,6 +44,9 @@ Check progress any time from a third tab:
 
     status
     watch      # live view
+
+In `watch`, `q` quits (and offers to stop the daemons with it) and `s` opens
+the settings screen - see Settings below.
 
 ## What it detects
 
@@ -90,15 +94,21 @@ and any "play all" duplicate should say `extra` or `skip`. Adjust
 `DURATION_CLASSES` is a comma-separated list of
 `name:min-max:folder:quality[:dedup]` entries, e.g. the default:
 
-    DURATION_CLASSES=extra:180-1199:extras:22,main:1200-10800:encoded:20:dedup
+    DURATION_CLASSES=extra:180-1199:extras:22,main:1200-10800:encoded:20
 
 A title's duration must fall in a class's `min-max` (seconds) to match;
 first match wins, and anything matching none of them isn't encoded at all.
 `folder` is where it lands under a disc's destination, `quality` is
 HandBrake's `--quality` (RF) for that class, and the optional `dedup` flag
-drops a second title with that exact duration - only worth setting on a
-class that should fire once (a movie/episode; discs sometimes list the main
-feature twice). Add as many classes as you want - a `commentary` or
+drops a second title with that exact duration.
+
+`dedup` is off by default, and worth turning on only for a disc that
+genuinely lists the same film twice ("Play Movie" plus a separate menu entry
+of identical content). It is wrong for TV: episodes on one disc naturally
+cluster within seconds of each other - four real titles at 2530, 2530, 2537
+and 2533 seconds, two of them bit-for-bit different files - so matching on
+duration alone silently drops a distinct episode. Check your own discs before
+setting it. Add as many classes as you want - a `commentary` or
 `featurette` tier with its own folder and quality, tighter windows for a
 mixed sitcom/movie shelf, whatever your discs need.
 
@@ -113,6 +123,25 @@ you see combing, `DEINTERLACE_ARGS` needs setting.
 For audio, `cdparanoia -Q -d <device>` lists a disc's tracks directly if you
 want to sanity-check before ripping.
 
+## Encoding throughput
+
+`ENCODE_JOBS` is how many HandBrake jobs run at once, `ENCODER_PRESET` is the
+x264 preset, and `ENCODE_THREADS` caps the threads any one job may use.
+
+The defaults (4 jobs, `fast`, threads capped at cores/jobs) were measured on
+an M1 Pro with 8 performance cores: `medium` saturates it at 2 concurrent
+jobs, while `fast` keeps scaling through 4, for roughly 33% more aggregate
+throughput at about 3.6% bigger files at the same RF. Those numbers are
+specific to that CPU and preset. Re-benchmark if you change any of it: encode
+one short clip alone, then N of them at once, and compare the wall time.
+
+The thread cap matters more than it looks. Jobs in a batch don't finish
+together - a 168-minute title far outlasts a 42-minute one - so a job can end
+up running alone, and an uncapped x264 then takes every core it can see. That
+starved two concurrent MakeMKV rips of scheduling time for over ten minutes
+(both sat at about 3% CPU with nothing written). The cap keeps a fixed
+ceiling however many siblings are still going, so ripping always has room.
+
 ## Resuming
 
 Everything is resumable. Stop either daemon with Ctrl-C whenever you like.
@@ -126,6 +155,58 @@ and it'll ask whether to also stop the daemons.)
 Before finishing, check for failures:
 
     grep FAIL "$LIBRARY/.ripstate/rip.log"
+    grep -i WARN "$LIBRARY/.ripstate/rip.log"
+
+`WARN` lines are worth reading. A disc routing to a folder that already holds
+finished output is ripped alongside it as `<name> (<label>)/` rather than over
+it, and says so there - reconcile those by hand.
+
+Every rip also keeps MakeMKV's own output at
+`$LIBRARY/.ripstate/logs/<label>.mkv.log`. That is where a read error, a
+retried sector or a title MakeMKV quietly gave up on shows. A rip whose log
+reports "N titles saved, M failed" is marked failed even when makemkvcon
+exits 0, so a partial rip never counts as a finished one.
+
+## Settings
+
+Every setting is an environment variable with a default in
+`backcrack/config.py`, and a one-off `LIBRARY=... ripd` still overrides
+everything.
+
+`s` in `watch` opens a settings screen over the same variables, writing them
+to `settings.env` in this directory. That file sits underneath `os.environ` in
+precedence and is read by any process started afterwards, so a change survives
+past the current shell without editing source. It is local state and is not
+tracked by git. `ripd` and `encd` read their config at startup, so restart
+them to pick a change up.
+
+The same screen has an entry for adding a `labels.map` line, which is the
+manual escape hatch for a disc whose %tokens% couldn't be resolved - pick it
+out of `UNSORTED/`, fill in the tokens the active pattern needs, and `sortd`
+files it within a few seconds.
+
+## Finishing a season
+
+Once a season's discs are all ripped and encoded, `namer` lays them out the
+way Jellyfin and Kodi expect:
+
+    namer                 every season episodes.map covers
+    namer "Season 4"      just one
+
+Each disc's encoded titles are renamed to `SxxExx Title.mkv` using the titles
+in `episodes.map`, moved up into the season folder itself, and every disc's
+extras are merged into one season-level `featurettes/` - a recognised extra
+type, which a bare `extras/` is not. Empty disc folders are removed; anything
+it doesn't recognise is left where it is.
+
+`episodes.map` is one block per season, a `# Season N` header then one title
+per line in broadcast order. Renaming assumes disc and title order matches
+broadcast order, which is the normal convention for a season box set.
+
+A season whose encoded-file count doesn't exactly match its title count is
+refused outright rather than guessed at. A mismatch means a disc is still
+ripping, a title never encoded, or one was wrongly deduped, and guessing would
+mislabel every episode after the gap.
 
 ## Tools it needs
 
