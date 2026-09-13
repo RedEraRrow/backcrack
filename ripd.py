@@ -7,6 +7,7 @@ ntfy, hand it to the encoder. Ctrl-C to stop.
 
 Insert discs in any drive, in any order. Already-ripped discs eject at once.
 """
+import os
 import sys
 import time
 from pathlib import Path
@@ -17,11 +18,31 @@ from backcrack import disc
 from backcrack.rip import rip_video_disc, rip_audio_disc
 from backcrack.lib import log
 
-_LOCKS = set()
-
 
 def _lock_path(dev: str) -> Path:
     return cfg.STATE / f"lock-{Path(dev).name}"
+
+
+def _try_lock(dev: str):
+    """Atomically claims the lock for `dev`, or None if it's already held.
+
+    O_CREAT|O_EXCL is one atomic syscall - unlike the old exists()-then-
+    touch() check, two ripd polls (even from two separate ripd processes
+    accidentally running against the same $LIBRARY - `backcrack ripd` run
+    directly alongside the one bare `backcrack` already spawned, say) can't
+    both "win" the same drive: whichever's os.open() actually reaches the
+    filesystem first succeeds, the other gets FileExistsError. That race
+    is exactly what let two makemkvcon instances read the same disc at
+    once - drive noise "like two reads out of sync" was two reads, out of
+    sync, for real.
+    """
+    path = _lock_path(dev)
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        return None
+    os.close(fd)
+    return path
 
 
 def main() -> None:
@@ -39,10 +60,9 @@ def main() -> None:
     try:
         while True:
             for dev, kind, label in disc.pending_discs():
-                lock = _lock_path(dev)
-                if lock.exists():
+                lock = _try_lock(dev)
+                if lock is None:
                     continue
-                lock.touch()
                 target = rip_audio_disc if kind == "audio" else rip_video_disc
 
                 def _run(dev=dev, label=label, target=target, lock=lock):

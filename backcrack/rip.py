@@ -4,6 +4,7 @@ format-specific branches in here - everything else (locking, retry, eject,
 notify, queueing) is format-agnostic on purpose. Adding a third disc kind
 should only ever mean adding a third branch here.
 """
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -97,6 +98,41 @@ def already_handled(label: str, cdev: str) -> bool:
     return True
 
 
+def _dest_has_output(dest: Path) -> bool:
+    """True if dest already holds finished encode output - a completed rip
+    under a *different* label routing to the same folder (a relabelled
+    duplicate, a re-rip) must never silently wipe it. "encoded" covers audio
+    (hardcoded in encode_audio_one) as well as the stock video class name."""
+    folders = {"encoded"} | {cls.folder for cls in cfg.DURATION_CLASSES}
+    return any((dest / f).is_dir() and any((dest / f).iterdir()) for f in folders)
+
+
+def _make_dest(dest: Path, label: str) -> Path:
+    """dest, cleared and (re)created - unless it already has finished output,
+    in which case a fresh sibling folder is used instead and the collision is
+    logged loudly for a human to reconcile. `shutil.rmtree(dest)` used to run
+    unconditionally here: a second disc (or a labels.map entry added after
+    the first disc's own rip) routing to an already-completed dest silently
+    destroyed the finished rip before the new one even started - confirmed
+    for real on Season 7 Disc 2, where the replacement disc then turned out
+    to be the physically damaged one (see the titles-saved check below) and
+    the original, good rip was gone for good.
+    """
+    if dest.exists() and _dest_has_output(dest):
+        alt = dest.parent / f"{dest.name} ({label})"
+        log(cfg.RIPLOG, f"WARN  '{label}' would overwrite existing output at "
+                         f"{dest.relative_to(cfg.LIBRARY)} - ripping to '{alt.name}/' instead, reconcile manually")
+        notify(f"backcrack - {label} redirected",
+               f"{dest.name} already has output; ripped alongside it as '{alt.name}' instead.",
+               "high", "warning")
+        dest = alt
+    if dest.exists():
+        import shutil as _shutil
+        _shutil.rmtree(dest, ignore_errors=True)
+    dest.mkdir(parents=True)
+    return dest
+
+
 def route_dest(kind: str, label: str, rdev: str) -> Path:
     dest = pattern.dest_for(kind, label, rdev)
     if "UNSORTED" in dest.parts:
@@ -170,26 +206,41 @@ def rip_video_disc(dev: str, label: str) -> None:
     subprocess.run(["pkill", "-f", "DVD Player"], capture_output=True, timeout=5)
     subprocess.run(["diskutil", "unmountDisk", cdev], capture_output=True, timeout=15)
 
-    if dest.exists():
-        import shutil as _shutil
-        _shutil.rmtree(dest, ignore_errors=True)
-    dest.mkdir(parents=True)
+    dest = _make_dest(dest, label)
     mark_unsorted_kind(dest, "video")
 
+    # MakeMKV's own stdout/stderr used to just be discarded (capture_output=True,
+    # never read) - the one place that would show a read error, a retried
+    # sector, or a title it silently gave up on, on a scratched or otherwise
+    # marginal disc. Logged instead, matching HandBrake's own per-title log.
+    mkv_log = cfg.LOGDIR / f"{label}.mkv.log"
     t0 = time.monotonic()
     if cfg.RIP_MODE == "video_ts":
-        rc = subprocess.run(
-            [cfg.MKVCON, "--noscan", "backup", "--decrypt", f"disc:{idx}", str(dest)],
-            capture_output=True, timeout=None,
-        ).returncode
+        with open(mkv_log, "ab") as logf:
+            rc = subprocess.run(
+                [cfg.MKVCON, "--noscan", "backup", "--decrypt", f"disc:{idx}", str(dest)],
+                stdout=logf, stderr=subprocess.STDOUT, timeout=None,
+            ).returncode
         ok = rc == 0 and (dest / "VIDEO_TS").is_dir()
     else:
         nsrc = dest / "source"; nsrc.mkdir(parents=True, exist_ok=True)
-        rc = subprocess.run(
-            [cfg.MKVCON, "--noscan", f"--minlength={cfg.MIN_TITLE_S}", "mkv", f"dev:{rdev}", "all", str(nsrc)],
-            capture_output=True, timeout=None,
-        ).returncode
+        with open(mkv_log, "ab") as logf:
+            rc = subprocess.run(
+                [cfg.MKVCON, "--noscan", f"--minlength={cfg.MIN_TITLE_S}", "mkv", f"dev:{rdev}", "all", str(nsrc)],
+                stdout=logf, stderr=subprocess.STDOUT, timeout=None,
+            ).returncode
         ok = rc == 0 and any(nsrc.glob("*.mkv"))
+        # "N titles saved, M failed" is MakeMKV's own tally, printed even when
+        # it still exits 0 and even when some titles genuinely did save (the
+        # Season 7 Disc 2 case: rc=0, 2 titles saved, exit looked clean) - a
+        # partial rip must never be trusted as a complete one, or it goes on
+        # to overwrite whatever finished rip is already sitting at this dest.
+        m = re.search(r"(\d+) titles saved, (\d+) failed", mkv_log.read_text(errors="ignore"))
+        if m and int(m.group(2)) > 0:
+            ok = False
+            log(cfg.RIPLOG, f"      {label}: {m.group(1)} titles saved, {m.group(2)} failed (partial - see {mkv_log})")
+        elif not ok or rc != 0:
+            log(cfg.RIPLOG, f"      {label}: makemkvcon rc={rc} - see {mkv_log}")
     mins = int((time.monotonic() - t0) / 60)
 
     finish_rip(label, dest, cdev, ok, mins, "video")
@@ -209,10 +260,7 @@ def rip_audio_disc(dev: str, label: str) -> None:
     log(cfg.RIPLOG, f"START {label} -> {dest.relative_to(cfg.LIBRARY)}  (audio, {dev})")
     subprocess.run(["diskutil", "unmountDisk", cdev], capture_output=True, timeout=15)
 
-    if dest.exists():
-        import shutil as _shutil
-        _shutil.rmtree(dest, ignore_errors=True)
-    dest.mkdir(parents=True)
+    dest = _make_dest(dest, label)
     mark_unsorted_kind(dest, "audio")
 
     nsrc = dest / "source"; nsrc.mkdir(parents=True, exist_ok=True)
