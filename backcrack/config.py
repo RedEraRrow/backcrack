@@ -8,13 +8,27 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent.parent
+# Everything you edit or that edits itself lives OUTSIDE the checkout, so the
+# repo stays code-only and nothing personal needs gitignoring: your saved
+# settings, your labels.map overrides, your episodes.map titles. Same
+# convention as backtrack's CONFIG_DIR - $BACKCRACK_CONFIG_DIR wins, then
+# $XDG_CONFIG_HOME/backcrack, else ~/.config/backcrack. (No Windows branch:
+# this pipeline shells out to /Applications/MakeMKV.app and Homebrew binaries,
+# so it is macOS/Linux by construction.)
+def _default_config_dir() -> Path:
+    xdg = os.getenv("XDG_CONFIG_HOME")
+    return (Path(xdg) if xdg else Path.home() / ".config") / "backcrack"
+
+
+CONFIG_DIR = Path(os.getenv("BACKCRACK_CONFIG_DIR") or _default_config_dir())
+CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+
 # Settings changed from `backcrack watch`'s settings screen land here rather
 # than in real env vars, so they survive past this process without editing
 # this file. os.environ still wins when set (a one-off `FOO=bar` override
 # stays the escape hatch it always was) - this is just a second, persisted
 # fallback beneath it.
-SETTINGS_FILE = HERE / "settings.env"
+SETTINGS_FILE = CONFIG_DIR / "settings.env"
 
 
 def _load_settings_file() -> dict:
@@ -227,7 +241,10 @@ SETTINGS = [
 ]
 
 # Derived. Don't edit.
-LABELS_MAP = HERE / "labels.map"
+# Your files, in CONFIG_DIR (see the top of this file): manual disc->token
+# overrides, and the per-season episode titles namer.py renames from.
+LABELS_MAP = CONFIG_DIR / "labels.map"
+EPISODES_MAP = CONFIG_DIR / "episodes.map"
 STATE = LIBRARY / ".ripstate"
 LOGDIR = STATE / "logs"
 QUEUE = STATE / "queue"

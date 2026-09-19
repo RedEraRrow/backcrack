@@ -26,11 +26,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backcrack import config as cfg
 
-MAP_FILE = Path(__file__).resolve().parent / "episodes.map"
+MAP_FILE = cfg.EPISODES_MAP
 
 
 def load_episode_map() -> dict:
     """{"Season 1": ["Pilot", "Paternity", ...], ...}"""
+    if not MAP_FILE.exists():
+        sys.exit(f"No episodes.map at {MAP_FILE}\n"
+                 "Create it: a '# Season N' header per block, then one episode "
+                 "title per line in broadcast order.")
     seasons = {}
     current = None
     for line in MAP_FILE.read_text().splitlines():

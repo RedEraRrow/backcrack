@@ -49,7 +49,7 @@ PATTERN_AUDIO = "%artist%/%album%"
 ```
 
 ```
-# labels.map
+# labels.map  (in ~/.config/backcrack, not the checkout)
 HOUSE_S4_DISC2|season=4,disc=2
 AudioCD-14tracks-1710000000|artist=Pixies,album=Doolittle
 ```

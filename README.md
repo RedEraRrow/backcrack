@@ -77,8 +77,9 @@ change these for a movie shelf, a mixed CD/DVD pile, whatever you're ripping
 this run. See `docs/pattern-tokens.md`.
 
 Discs whose tokens can't be resolved go to `UNSORTED/<label>/`, and you get
-a high-priority push. Add a line to `labels.map` and it files itself within
-a few seconds (`sortd` watches for exactly this).
+a high-priority push. Add a line to `labels.map` (in your config directory —
+see [Settings](#settings)) and it files itself within a few seconds (`sortd`
+watches for exactly this).
 
 ## Before trusting a whole shelf of discs
 
@@ -174,11 +175,27 @@ Every setting is an environment variable with a default in
 everything.
 
 `s` in `watch` opens a settings screen over the same variables, writing them
-to `settings.env` in this directory. That file sits underneath `os.environ` in
-precedence and is read by any process started afterwards, so a change survives
-past the current shell without editing source. It is local state and is not
-tracked by git. `ripd` and `encd` read their config at startup, so restart
-them to pick a change up.
+to `settings.env` in your config directory. That file sits underneath
+`os.environ` in precedence and is read by any process started afterwards, so a
+change survives past the current shell without editing source. `ripd` and
+`encd` read their config at startup, so restart them to pick a change up.
+
+### Your files live outside the checkout
+
+Everything personal — your saved settings, your disc overrides, your episode
+titles — lives in a config directory, not in this repo. The checkout stays
+code-only, and nothing of yours needs gitignoring or risks being committed.
+
+| File | What it is |
+|---|---|
+| `settings.env` | what the `watch` settings screen saves |
+| `labels.map` | manual disc → %token% overrides |
+| `episodes.map` | per-season episode titles, for `namer` |
+
+The directory is `$BACKCRACK_CONFIG_DIR` if set, else
+`$XDG_CONFIG_HOME/backcrack`, else `~/.config/backcrack`. It is created on
+first run. Point `BACKCRACK_CONFIG_DIR` somewhere else to keep separate sets
+of overrides for separate shelves.
 
 The same screen has an entry for adding a `labels.map` line, which is the
 manual escape hatch for a disc whose %tokens% couldn't be resolved - pick it
@@ -199,8 +216,9 @@ extras are merged into one season-level `featurettes/` - a recognised extra
 type, which a bare `extras/` is not. Empty disc folders are removed; anything
 it doesn't recognise is left where it is.
 
-`episodes.map` is one block per season, a `# Season N` header then one title
-per line in broadcast order. Renaming assumes disc and title order matches
+`episodes.map` lives in your config directory (see [Settings](#settings)) and
+is one block per season: a `# Season N` header, then one title per line in
+broadcast order. Renaming assumes disc and title order matches
 broadcast order, which is the normal convention for a season box set.
 
 A season whose encoded-file count doesn't exactly match its title count is
