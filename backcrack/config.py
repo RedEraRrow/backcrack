@@ -9,6 +9,8 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+from backbone import ui as _ui
+
 # Everything you edit or that edits itself lives OUTSIDE the checkout, so the
 # repo stays code-only and nothing personal needs gitignoring: your saved
 # settings, your labels.map overrides, your episodes.map titles. Same
@@ -113,7 +115,7 @@ NTFY_SERVER = _env("NTFY_SERVER", "https://ntfy.sh")
 # PATTERN_VIDEO / PATTERN_AUDIO below, not fixed here - point LIBRARY at
 # whatever you're ripping this run (one show, one CD shelf, a mixed pile).
 # The default suits one particular show; set LIBRARY rather than rely on it.
-LIBRARY = Path(_env("LIBRARY", str(Path.home() / "Media" / "TV" / "House (2004)"))).expanduser()
+LIBRARY = Path(_env("LIBRARY", str(Path.home() / "Media" / "rips"))).expanduser()
 
 # MKV is diskspeed's old name for it, still honoured.
 MKVCON = _env("MKVCON", _env("MKV", "/Applications/MakeMKV.app/Contents/MacOS/makemkvcon"))
@@ -242,7 +244,13 @@ SETTINGS = [
     ("MIN_TITLE_S", "int", "Shortest title MakeMKV rips (seconds)"),
     ("NTFY_TOPIC", "str", "ntfy topic (blank = no pushes)"),
     ("NTFY_SERVER", "str", "ntfy server"),
+    ("ACCENT", "accent", "Accent colour (green, red, blue, amber… or #RRGGBB)"),
 ]
+
+# The accent colour of every screen (backbone.ui.ACCENT_PRESETS key or
+# "#RRGGBB"), applied here once so each tool gets it by importing config.
+ACCENT = _env("ACCENT", "green")
+_ui.set_accent(ACCENT)
 
 # Derived. Don't edit.
 # Your files, in CONFIG_DIR (see the top of this file): manual disc->token

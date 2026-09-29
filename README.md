@@ -34,10 +34,9 @@ installed.
 
 ## Before the first disc
 
-Set `LIBRARY`, the folder finished discs land in. Its default is
-`~/Media/TV/House (2004)`, which is only right if that's the show you're
-ripping. Set it from `watch`'s settings screen (`s`), in `settings.env`, or
-as an environment variable (see [Settings](#settings)).
+`LIBRARY` is the folder finished discs land in, `~/Media/rips` unless you
+set it: from `watch`'s settings screen (`s`), in `settings.env`, or as an
+environment variable (see [Settings](#settings)).
 
 For a push on every eject, set `NTFY_TOPIC` to a topic name of your own, and
 `NTFY_SERVER` too if you don't use the public `https://ntfy.sh`. Anyone who
@@ -245,6 +244,7 @@ The ones not covered elsewhere in this README:
 |---|---|---|
 | `MKVCON`, `HBCLI`, `CDPARANOIA`, `CD_DISCID`, `FLAC`, `FFMPEG` | found on PATH (MakeMKV at `/Applications/MakeMKV.app`) | tool paths |
 | `NOTIFY_ENCODES` | `0` | also push when a disc finishes encoding |
+| `ACCENT` | `green` | the accent colour: `green`, `red`, `yellow`, `blue`, `magenta`, `cyan` (your terminal's own), `amber`, `coral`, `rose`, `lavender`, `sky`, `mint`, or `#RRGGBB` |
 | `WATCH_INTERVAL` | `1` | seconds between `watch` refreshes |
 | `SORT_INTERVAL` | `5` | seconds between `sortd` passes |
 | `TOTAL_DISCS` | `0` | discs in this run; shows a progress bar and ETA in `watch` (0 hides them) |

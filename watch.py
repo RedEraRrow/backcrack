@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backbone.nav import NAV_STACK
+from backbone import ui
 from backbone.prompt_core import hint, run_dashboard
 from backbone.ui import (
     Colors as C, bar, clip_ansi, content_width, dir_size_kb, get_terminal_width,
@@ -313,6 +314,9 @@ def _apply_live(name: str, kind: str, new: str) -> None:
         setattr(cfg, name, new == "1")
     elif kind == "int":
         setattr(cfg, name, int(new))
+    elif name == "ACCENT":
+        cfg.ACCENT = new
+        ui.set_accent(new)
     elif name == "DURATION_CLASSES":
         setattr(cfg, name, cfg._parse_duration_classes(new))
         _folder_counts.clear()
@@ -341,6 +345,9 @@ def open_settings() -> None:
                 continue
             if kind == "int" and not entered.strip().lstrip("-").isdigit():
                 continue
+            if kind == "accent" and ui.accent_code(entered.strip()) is None:
+                continue                       # not a preset name or #RRGGBB
+            entered = entered.strip() if kind == "accent" else entered
             new = entered
         cfg.save_setting(name, new)
         _apply_live(name, kind, new)
