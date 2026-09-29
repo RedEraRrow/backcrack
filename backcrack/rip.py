@@ -11,7 +11,8 @@ from typing import Optional
 from . import config as cfg
 from . import disc
 from . import pattern
-from .lib import log, notify, human_gb, dir_size_kb
+from backbone.ui import dir_size_kb, human_gb
+from .lib import log, notify
 
 
 def disc_present(cdev: str) -> bool:

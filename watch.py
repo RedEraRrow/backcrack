@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backbone.nav import NAV_STACK
-from backbone.prompt_core import _hint, run_dashboard
+from backbone.prompt_core import hint, run_dashboard
 from backbone.ui import (
     Colors as C, bar, clip_ansi, content_width, dir_size_kb, get_terminal_width,
     header_box, human_gb, rate_of_change, sparkline, spinner, truncate_text,
@@ -28,7 +28,7 @@ from backbone.ui import (
 from backcrack import config as cfg
 from backcrack.disc import DVD_1X_BPS
 from backcrack.encode import PART
-from backcrack.lib import stop_daemons
+from backcrack.lib import class_file_counts, count_entries, disk_free, ps_listing, stop_daemons
 
 NAV_STACK[:] = ["backcrack", "watch"]
 
@@ -55,22 +55,7 @@ _learned: set = set()
 _growth: dict = {}          # sd (source dir str) -> (last_kb, last_grow_ts)
 _history: dict = {}         # sd -> [(ts, kb), ...]
 _rate_history: dict = {}    # sd -> [rate, rate, ...]  (sparkline()'s own window)
-_counts_cache = {"t": 0}
-_CLASS_FOLDERS = list(dict.fromkeys(c.folder for c in cfg.DURATION_CLASSES))  # unique, order preserved
-
-
-def ps_snapshot() -> str:
-    """One `ps -Awwo command` listing, meant to be fetched once per render()
-    tick and reused everywhere - it used to be re-run once per already-ripped
-    disc folder (dev_for_dest's own private call), scaling linearly with
-    library size: 29 discs meant 29 full process listings (~1.3s) on every
-    single tick, freezing the whole dashboard (no redraw, no keypress, no
-    resize) that whole time.
-    """
-    try:
-        return subprocess.run(["ps", "-Awwo", "command"], capture_output=True, text=True, timeout=10).stdout
-    except subprocess.TimeoutExpired:
-        return ""
+_folder_counts: dict = {}   # class_file_counts(), refreshed every 15 frames
 
 
 def dev_for_dest(dest: Path, ps_out: str) -> str:
@@ -168,14 +153,11 @@ def render() -> list:
     cols = content_width()
     spin = spinner(FRAMES)
 
-    ripped = len(list(cfg.DONEDIR.iterdir())) if cfg.DONEDIR.exists() else 0
-    queued = len(list(cfg.QUEUE.iterdir())) if cfg.QUEUE.exists() else 0
-    encd = len(list(cfg.ENCDONE.iterdir())) if cfg.ENCDONE.exists() else 0
+    ripped, queued, encd = (count_entries(d) for d in (cfg.DONEDIR, cfg.QUEUE, cfg.ENCDONE))
 
-    if FRAMES % 15 == 0 or _counts_cache["t"] == 0:
-        for folder in _CLASS_FOLDERS:
-            _counts_cache[folder] = sum(1 for _ in cfg.LIBRARY.glob(f"**/{folder}/*")) if cfg.LIBRARY.exists() else 0
-        _counts_cache["t"] = 1
+    if FRAMES % 15 == 0 or not _folder_counts:
+        _folder_counts.clear()
+        _folder_counts.update(class_file_counts())
 
     left = f"  BACKCRACK   {cfg.LIBRARY.name}   mode: {cfg.RIP_MODE}"
     right = f"{time.strftime('%H:%M:%S')}  "
@@ -205,14 +187,12 @@ def render() -> list:
     else:
         lines.append(f"  {MUTE}DISCS{R}   {TXT}{ripped} ripped{R}")
 
-    free = subprocess.run(["df", "-h", str(cfg.LIBRARY)], capture_output=True, text=True).stdout
-    free_gb = free.splitlines()[-1].split()[3] if len(free.splitlines()) > 1 else "?"
-    lines.append(f"  {MUTE}DISK{R}   {TXT}{free_gb} free{R}   {MUTE}library{R} {TXT}{human_gb(dir_size_kb(cfg.LIBRARY))} GB{R}")
+    lines.append(f"  {MUTE}DISK{R}   {TXT}{disk_free(cfg.LIBRARY)} free{R}   {MUTE}library{R} {TXT}{human_gb(dir_size_kb(cfg.LIBRARY))} GB{R}")
     lines.append("")
 
     # ---- RIPPING ------------------------------------------------------------
     lines.append(f"  {PRIMARY}RIPPING{R}")
-    ps_out = ps_snapshot()   # one process listing, reused below and by ENCODING
+    ps_out = ps_listing()   # once per frame: reused for every disc below and by ENCODING
     rows = []
     # Any depth, since a pattern can nest a disc's folder as deep as it likes.
     sources = sorted(p for p in cfg.LIBRARY.rglob("source") if p.is_dir() and ".ripstate" not in p.parts)
@@ -273,7 +253,7 @@ def render() -> list:
     lines.append("")
 
     # ---- ENCODING -------------------------------------------------------------
-    folder_counts = "  ".join(f"{MUTE}{folder}{R} {PRIMARY}{_counts_cache.get(folder, 0)}{R}" for folder in _CLASS_FOLDERS)
+    folder_counts = "  ".join(f"{MUTE}{folder}{R} {PRIMARY}{n}{R}" for folder, n in _folder_counts.items())
     lines.append(
         f"  {PRIMARY}ENCODING{R}  {MUTE}queue{R} {TXT}{queued}{R}  {MUTE}done{R} {TXT}{encd}{R}  {folder_counts}"
     )
@@ -307,7 +287,7 @@ def render() -> list:
                 color = DIM
             lines.append(f"   {color}{truncate_text(ln[11:], max(4, cols - 3))}{R}")
     lines.append("")
-    lines.append(_hint(("q", "quit"), ("s", "settings")))
+    lines.append(hint(("q", "quit"), ("s", "settings")))
 
     FRAMES += 1
     # Hard guarantee: no rendered line ever exceeds the terminal's actual
@@ -338,7 +318,6 @@ def _apply_live(name: str, kind: str, new: str) -> None:
     immediately, so the screen doesn't lag its own settings menu. ripd/encd
     are separate processes that only read config.py at startup - same as
     every other config change, they need restarting to pick this up too."""
-    global _CLASS_FOLDERS
     if name == "LIBRARY":
         cfg.use_library(Path(new).expanduser())
     elif kind == "path":
@@ -351,7 +330,7 @@ def _apply_live(name: str, kind: str, new: str) -> None:
         setattr(cfg, name, int(new))
     elif name == "DURATION_CLASSES":
         setattr(cfg, name, cfg._parse_duration_classes(new))
-        _CLASS_FOLDERS = list(dict.fromkeys(c.folder for c in cfg.DURATION_CLASSES))
+        _folder_counts.clear()
     else:
         setattr(cfg, name, new)
 

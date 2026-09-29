@@ -7,18 +7,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backcrack import config as cfg
 from backbone.ui import dir_size_kb, human_gb
-from backcrack.lib import find_daemons
+from backcrack.lib import class_file_counts, count_entries, disk_free, find_daemons
 
 
 def main() -> None:
-    ripped = len(list(cfg.DONEDIR.iterdir())) if cfg.DONEDIR.exists() else 0
-    queued = len(list(cfg.QUEUE.iterdir())) if cfg.QUEUE.exists() else 0
-    enc = len(list(cfg.ENCDONE.iterdir())) if cfg.ENCDONE.exists() else 0
-    class_folders = list(dict.fromkeys(c.folder for c in cfg.DURATION_CLASSES))
-    folder_n = {
-        folder: (sum(1 for _ in cfg.LIBRARY.glob(f"**/{folder}/*")) if cfg.LIBRARY.exists() else 0)
-        for folder in class_folders
-    }
+    ripped, queued, enc = (count_entries(d) for d in (cfg.DONEDIR, cfg.QUEUE, cfg.ENCDONE))
+    folder_n = class_file_counts()
 
     print("================ backcrack status ================")
     print(f"  library          {cfg.LIBRARY}")
@@ -29,16 +23,14 @@ def main() -> None:
         print(f"  {folder} files{' ' * max(1, 11 - len(folder))}{n}")
     print()
     print(f"  library size     {human_gb(dir_size_kb(cfg.LIBRARY))} GB")
-    df = subprocess.run(["df", "-h", str(cfg.LIBRARY)], capture_output=True, text=True).stdout
-    free = df.splitlines()[-1].split()[3] if len(df.splitlines()) > 1 else "?"
-    print(f"  disk free        {free}")
+    print(f"  disk free        {disk_free(cfg.LIBRARY)}")
     print()
     print("-- top-level groups ---------------------------------")
     if cfg.LIBRARY.exists():
         for d in sorted(cfg.LIBRARY.iterdir()):
             if not d.is_dir() or d.name in ("UNSORTED", ".ripstate"):
                 continue
-            ne = sum(1 for folder in class_folders for _ in d.glob(f"**/{folder}/*"))
+            ne = sum(1 for folder in folder_n for _ in d.glob(f"**/{folder}/*"))
             print(f"  {d.name:<28} {ne:>4} files")
 
     unsorted = cfg.LIBRARY / "UNSORTED"

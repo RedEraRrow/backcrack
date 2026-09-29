@@ -12,7 +12,7 @@ from pathlib import Path
 
 from . import config as cfg
 from . import pattern
-from .lib import log, notify
+from .lib import log, notify, ps_listing
 
 SORTLOG = cfg.STATE / "sort.log"
 QUIET_S = 90  # a dir touched more recently than this is live
@@ -28,14 +28,10 @@ def _recently_touched(d: Path) -> bool:
 
 
 def _named_by_process(d: Path) -> bool:
-    try:
-        out = subprocess.run(["ps", "-Awwo", "command"], capture_output=True, text=True, timeout=10).stdout
-    except subprocess.TimeoutExpired:
-        return False
     target = str(d)
     return any(
         (("makemkvcon" in line) or ("HandBrakeCLI" in line) or ("cdparanoia" in line)) and target in line
-        for line in out.splitlines()
+        for line in ps_listing().splitlines()
     )
 
 

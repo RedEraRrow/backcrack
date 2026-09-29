@@ -4,14 +4,13 @@ the new version as ripd.py.new beside ripd.py, run swapd, and it waits until
 no drive is ripping, swaps ripd.py.new into place and restarts ripd. Exits
 after.
 """
-import subprocess
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backcrack import config as cfg
-from backcrack.lib import find_daemons, log, notify, stop_daemons
+from backcrack.lib import find_daemons, log, notify, ps_listing, spawn_daemon, stop_daemons
 
 HERE = Path(__file__).resolve().parent
 SWAPLOG = cfg.STATE / "swap.log"
@@ -20,8 +19,7 @@ SWAPLOG = cfg.STATE / "swap.log"
 def idle() -> bool:
     if any(cfg.STATE.glob("lock-*")):
         return False
-    out = subprocess.run(["ps", "-Awwo", "command"], capture_output=True, text=True).stdout
-    return not any(("makemkvcon" in l or "cdparanoia" in l) for l in out.splitlines())
+    return not any(("makemkvcon" in l or "cdparanoia" in l) for l in ps_listing().splitlines())
 
 
 def main() -> None:
@@ -52,14 +50,12 @@ def main() -> None:
         new_ripd.replace(HERE / "ripd.py")
     except OSError:
         log(SWAPLOG, "ERROR mv failed; old ripd.py left in place, restarting it")
-        subprocess.Popen([sys.executable, str(HERE / "ripd.py")],
-                          stdout=open(cfg.STATE / "ripd.out", "ab"), stderr=subprocess.STDOUT)
+        spawn_daemon("ripd")
         return
 
     for lock in cfg.STATE.glob("lock-*"):
         lock.unlink(missing_ok=True)
-    subprocess.Popen([sys.executable, str(HERE / "ripd.py")],
-                      stdout=open(cfg.STATE / "ripd.out", "ab"), stderr=subprocess.STDOUT)
+    spawn_daemon("ripd")
     time.sleep(4)
     if find_daemons("ripd"):
         log(SWAPLOG, "SWAPPED and restarted ripd.py")

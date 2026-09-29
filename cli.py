@@ -20,9 +20,7 @@ Settings are unchanged - still env vars read by backcrack/config.py
     LIBRARY=~/Media/rips backcrack ripd
 """
 import argparse
-import subprocess
 import sys
-from pathlib import Path
 
 import diskspeed
 import encd
@@ -34,9 +32,7 @@ import swapd
 import titles
 import watch
 from backcrack import config as cfg
-from backcrack.lib import find_daemons
-
-HERE = Path(__file__).resolve().parent
+from backcrack.lib import find_daemons, spawn_daemon
 
 COMMANDS = {
     "ripd": ripd.main,
@@ -51,17 +47,11 @@ COMMANDS = {
 }
 
 
-def _spawn(script: str) -> None:
-    out = cfg.STATE / f"{script.removesuffix('.py')}.out"
-    subprocess.Popen([sys.executable, "-u", str(HERE / script)],
-                      stdout=open(out, "ab"), stderr=subprocess.STDOUT)
-
-
 def launch_all() -> None:
     started = []
     for name, wanted in (("ripd", cfg.LAUNCH_RIPD), ("encd", cfg.LAUNCH_ENCD), ("sortd", cfg.LAUNCH_SORTD)):
         if wanted and not find_daemons(name):
-            _spawn(f"{name}.py")
+            spawn_daemon(name)
             started.append(name)
 
     if cfg.LAUNCH_WATCH:

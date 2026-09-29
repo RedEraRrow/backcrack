@@ -3,6 +3,7 @@ import json
 import os
 import signal
 import subprocess
+import sys
 import threading
 import urllib.request
 from datetime import datetime
@@ -61,6 +62,48 @@ def find_daemons(*names: str) -> list:
     return found
 
 
+def ps_listing() -> str:
+    """Every running process's full command line, one per line."""
+    try:
+        return subprocess.run(["ps", "-Awwo", "command"], capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def disk_free(path: Path) -> str:
+    """Free space on `path`'s volume as `df -h` shows it, or "?"."""
+    try:
+        lines = subprocess.run(["df", "-h", str(path)], capture_output=True, text=True, timeout=10).stdout.splitlines()
+    except (OSError, subprocess.TimeoutExpired):
+        return "?"
+    return lines[-1].split()[3] if len(lines) > 1 else "?"
+
+
+def count_entries(d: Path) -> int:
+    """How many entries `d` holds (0 if it doesn't exist): discs ripped for
+    DONEDIR, jobs waiting for QUEUE, discs encoded for ENCDONE."""
+    return len(list(d.iterdir())) if d.exists() else 0
+
+
+def class_folders() -> list:
+    """Each duration class's output folder, once each, in config order."""
+    return list(dict.fromkeys(c.folder for c in cfg.DURATION_CLASSES))
+
+
+def class_file_counts() -> dict:
+    """{folder: files in every <folder>/ under LIBRARY} for class_folders()."""
+    return {f: sum(1 for _ in cfg.LIBRARY.glob(f"**/{f}/*")) if cfg.LIBRARY.exists() else 0
+            for f in class_folders()}
+
+
+def spawn_daemon(name: str) -> None:
+    """Starts `name`.py from the checkout in the background, its output
+    (unbuffered, so it's readable while it runs) appended to STATE/<name>.out."""
+    script = Path(__file__).resolve().parent.parent / f"{name}.py"
+    subprocess.Popen([sys.executable, "-u", str(script)],
+                     stdout=open(cfg.STATE / f"{name}.out", "ab"), stderr=subprocess.STDOUT)
+
+
 def stop_daemons(*names: str) -> int:
     """SIGTERMs every running daemon in `names`; returns how many it stopped."""
     stopped = 0
@@ -73,25 +116,9 @@ def stop_daemons(*names: str) -> int:
     return stopped
 
 
-def human_gb(kb: float) -> str:
-    return f"{kb / 1048576:.1f}"
-
-
-def dir_size_kb(path: Path) -> int:
-    total = 0
-    if path.exists():
-        for f in path.rglob("*"):
-            if f.is_file():
-                try:
-                    total += f.stat().st_size
-                except OSError:
-                    pass
-    return total // 1024
-
-
-# classify_class <seconds> -> the matching cfg.DurationClass, or None if it
-# fits none of them (video titles only) - see cfg.DURATION_CLASSES.
 def classify_class(seconds):
+    """The cfg.DurationClass a video title of `seconds` falls in, or None if
+    it fits none of them."""
     try:
         s = int(seconds)
     except (TypeError, ValueError):
