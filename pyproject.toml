@@ -7,6 +7,7 @@ name = "backcrack"
 version = "0.1.0"
 description = "CD/DVD/Blu-ray rip pipeline - MakeMKV/HandBrake for video, cdparanoia for audio, dynamic %token% library patterning."
 requires-python = ">=3.9"
+license = { text = "MIT" }
 # Not on PyPI - installed from its sibling checkout, at this absolute path
 # (see README, Install). If backbone is already installed, pip sees the
 # requirement satisfied and leaves it.

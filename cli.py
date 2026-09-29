@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""cli.py - single entry point. Bare `backcrack` starts ripd + encd in the
-background and opens the live TUI - everything you need for a morning of
-ripping, one command. Toggle LAUNCH_RIPD / LAUNCH_ENCD / LAUNCH_WATCH in
-backcrack/config.py (or as env vars) to run any of them by hand instead.
+"""cli.py - Bare `backcrack` starts ripd, encd and sortd in the background
+and opens the live TUI. Toggle LAUNCH_RIPD / LAUNCH_ENCD / LAUNCH_SORTD /
+LAUNCH_WATCH in settings.env (or as env vars) to run any of them by hand instead.
 
     backcrack             ripd + encd + sortd in the background, then the live TUI
     backcrack ripd
