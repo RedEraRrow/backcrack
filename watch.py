@@ -4,11 +4,12 @@ CD, DVD or Blu-ray job - the folders it watches (source/, encoded/, extras/)
 look the same regardless of format. Percentages are relative to the disc
 actually in the drive, read from its own volume size.
 
-    ./watch.py   ·   ONESHOT=1 ./watch.py   ·   NO_COLOR=1 ./watch.py
+    watch   ·   ONESHOT=1 watch   ·   NO_COLOR=1 watch
 
-State (growth history, disc-size calibration) lives in memory for the life
-of this process - no /tmp scratch files needed, unlike a shell daemon that
-has to persist that across separate invocations.
+Keys: q quits (and offers to stop ripd, encd and sortd), s opens the
+settings screen. Set TOTAL_DISCS to the number of discs in the run for a
+progress bar and ETA. Growth history and disc-size calibration live in
+memory for the life of the process.
 """
 import os
 import re
@@ -74,14 +75,8 @@ def _fetch_disc_kb(key: str, dv: str) -> None:
         info = subprocess.run(["diskutil", "info", f"/dev/{dv}"], capture_output=True, text=True, timeout=15).stdout
     except subprocess.TimeoutExpired:
         info = ""
-    # "Disk Size" (the physical media's own capacity), not "Total Space"/
-    # "Volume Total Space" (the mounted filesystem's reported size) - rip_
-    # video_disc() unmounts the disc before/during ripping (needed for raw
-    # device access), so by the time this runs Volume Total Space often
-    # reports 0, even though the disc's actual capacity is still readable
-    # regardless of mount state. Went unnoticed for anything near the old
-    # ~7GB fallback; a dual-layer disc makes it obviously wrong (100% at
-    # 10+GB ripped against a 7GB "total").
+    # "Disk Size" is the media's own capacity. "Volume Total Space" often
+    # reads 0 here, because rip_video_disc() unmounts the disc to rip it.
     m = re.search(r"Disk Size:.*\((\d+) Bytes\)", info)
     if m:
         _vol_kb[key] = int(int(m.group(1)) / 1024 * _calib)
@@ -91,12 +86,9 @@ def _fetch_disc_kb(key: str, dv: str) -> None:
 def disc_kb(dest: Path, ps_out: str) -> int:
     """This disc's own reported size in KB, or FALLBACK_KB until it's known.
 
-    `diskutil info` on a device MakeMKV/cdparanoia is actively reading can
-    take several seconds (I/O contention) - long enough to freeze the whole
-    dashboard (no redraw, no keypress, no resize) if called synchronously
-    from render(). Fetched in a background thread instead: the first tick
-    for a disc returns the fallback estimate immediately, later ticks pick
-    up the real size (cached in _vol_kb) once the fetch completes.
+    `diskutil info` on a drive that is being read can take seconds, so it
+    runs in a background thread and later ticks pick up the result from
+    _vol_kb, rather than stalling the dashboard.
     """
     key = str(dest)
     if key in _vol_kb:
@@ -216,11 +208,8 @@ def render() -> list:
             continue
         tot = disc_kb(dest, ps_out) or FALLBACK_KB
         if kb > tot:
-            # The estimate (diskutil's own reported capacity, or the
-            # fallback) was wrong - actual ripped data is ground truth once
-            # it exceeds a guess. 10% headroom so this doesn't immediately
-            # re-clamp back to a static "100% but still growing" the next
-            # time more data lands.
+            # The estimate was low. 10% headroom keeps a still-growing rip
+            # from sitting at 100%.
             tot = int(kb * 1.1)
         learn_calib(dest, kb, ps_out)
         pct = min(100, kb * 100 // tot) if tot else 0
@@ -290,10 +279,8 @@ def render() -> list:
     lines.append(hint(("q", "quit"), ("s", "settings")))
 
     FRAMES += 1
-    # Hard guarantee: no rendered line ever exceeds the terminal's actual
-    # width, so a line can never wrap no matter how narrow the window is -
-    # same practice as every hand-written widget in prompt.py (clip once
-    # per frame against the raw width, not the narrower content_width()).
+    # Clip every line to the terminal's full width so nothing wraps,
+    # however narrow the window.
     raw_w = get_terminal_width()
     return [clip_ansi(line, raw_w) for line in lines]
 
@@ -303,7 +290,7 @@ def _current_value_str(name: str, kind: str) -> str:
     if kind == "bool":
         return "1" if v else "0"
     if name == "DURATION_CLASSES":
-        # Serialize back to _parse_duration_classes()'s own spec grammar.
+        # Serialise back to _parse_duration_classes()'s own spec grammar.
         return ",".join(
             f"{c.name}:{c.min_s}-{c.max_s}:{c.folder}:{c.quality}" + (":dedup" if c.dedup else "")
             for c in v
@@ -314,10 +301,8 @@ def _current_value_str(name: str, kind: str) -> str:
 
 
 def _apply_live(name: str, kind: str, new: str) -> None:
-    """Reflect a changed setting into this already-running `watch` process
-    immediately, so the screen doesn't lag its own settings menu. ripd/encd
-    are separate processes that only read config.py at startup - same as
-    every other config change, they need restarting to pick this up too."""
+    """Apply a changed setting to this running `watch` at once. The daemons
+    read settings only at startup, so they need restarting to see it."""
     if name == "LIBRARY":
         cfg.use_library(Path(new).expanduser())
     elif kind == "path":

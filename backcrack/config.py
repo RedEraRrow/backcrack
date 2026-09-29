@@ -1,7 +1,8 @@
-"""config.py - settings for the backcrack rip pipeline. Edit this, not the daemons.
+"""config.py - settings for the backcrack rip pipeline, and their defaults.
 
-Every value reads its environment variable first, so a one-off override never
-needs editing this file: `RIP_MODE=video_ts python3 ripd.py`.
+Each value is read from its environment variable first, then from
+settings.env in CONFIG_DIR, then falls back to the default here. So a
+one-off override needs no edit: `RIP_MODE=video_ts ripd`.
 """
 import os
 import shutil
@@ -56,10 +57,9 @@ def _env_int(name: str, default: int) -> int:
 
 def save_setting(name: str, value: str) -> None:
     """Persist one setting to SETTINGS_FILE, replacing its line if already
-    present. Takes effect for any fresh process (ripd/encd need restarting
-    to pick it up, same as every other config change today) - the caller is
-    responsible for also reflecting it into this already-running process's
-    own `cfg` attributes if it needs to show up immediately (see watch.py).
+    present. Only processes started afterwards see it (ripd/encd need
+    restarting); a caller that wants it in its own running `cfg` has to set
+    that too (see watch.py).
     """
     lines = SETTINGS_FILE.read_text().splitlines() if SETTINGS_FILE.exists() else []
     out, found = [], False
@@ -112,6 +112,7 @@ NTFY_SERVER = _env("NTFY_SERVER", "https://ntfy.sh")
 # Where finished discs land. The layout beneath this is controlled by
 # PATTERN_VIDEO / PATTERN_AUDIO below, not fixed here - point LIBRARY at
 # whatever you're ripping this run (one show, one CD shelf, a mixed pile).
+# The default suits one particular show; set LIBRARY rather than rely on it.
 LIBRARY = Path(_env("LIBRARY", str(Path.home() / "Media" / "TV" / "House (2004)"))).expanduser()
 
 MKVCON = _env("MKVCON", "/Applications/MakeMKV.app/Contents/MacOS/makemkvcon")
@@ -138,16 +139,10 @@ RIP_MODE = _env("RIP_MODE", "titles")
 # Run titles.py on the first disc of each kind you rip and tune these to
 # match it: a 22-minute sitcom and a 150-minute film need very different
 # windows, and a gap between classes silently skips whatever runs in it.
-# Add, remove, resize, or rename classes freely - nothing else in the
-# pipeline hardcodes "main"/"extra"; only "encoded"/"extras" as the stock
-# folder names, which you're free to point elsewhere too.
-# dedup is off by default: it exists for a disc that legitimately lists the
-# same movie twice ("Play Movie" and a separate menu entry, identical
-# content), not for TV - episodes on the same disc naturally cluster around
-# a near-identical runtime (confirmed on a real season: four titles at
-# 2530/2530/2537/2533s, two of them bit-for-bit different files), so
-# duration alone silently drops a real, distinct episode. Add ":dedup" back
-# per class only if you've actually checked your discs list a movie twice.
+# Add, remove, resize, or rename classes freely: nothing hardcodes
+# "main"/"extra". The folder names are another matter: audio always goes to
+# "encoded", and namer.py only works with "encoded" and "extras".
+# dedup is off by default and wrong for TV; see the README before using it.
 DURATION_CLASSES = _parse_duration_classes(_env(
     "DURATION_CLASSES", "extra:180-1199:extras:22,main:1200-10800:encoded:20"
 ))
@@ -159,39 +154,27 @@ DURATION_CLASSES = _parse_duration_classes(_env(
 MIN_TITLE_S = _env_int("MIN_TITLE_S", min((c.min_s for c in DURATION_CLASSES), default=180))
 
 # ---- encoding: video -----------------------------------------------------
-# Measured on this machine (M1 Pro, 8 performance cores): medium's per-job
-# thread usage means 2 concurrent jobs already saturate it - a 3rd or 4th
-# just adds contention. fast demands far fewer threads per job, so it keeps
-# scaling cleanly through 4 concurrent (~33% faster aggregate throughput
-# than 2x medium, for ~3.6% bigger files at the same constant-quality RF).
-# Re-benchmark (encode a short clip solo vs N-at-once, time it) if you
-# change encoders, presets, or move to different hardware - these numbers
-# are specific to x264 at this preset on this CPU, not a general rule.
+# The defaults for jobs, preset and threads were benchmarked on an M1 Pro;
+# see the README's "Encoding throughput" before changing them.
 ENCODE_JOBS = _env_int("ENCODE_JOBS", 4)
 VIDEO_ENCODER = _env("VIDEO_ENCODER", "x264")
 ENCODER_PRESET = _env("ENCODER_PRESET", "fast")
 
-# The benchmark above measured jobs that were ALL concurrent from the start,
-# which isn't the whole picture: a batch's jobs don't all finish together (a
-# 168-minute title takes far longer than a 42-minute one), so a job can end
-# up running solo once its siblings are done. Without a thread cap, x264
-# auto-detects "how many cores are free right now" and a solo job happily
-# grabs every performance core - which starved two concurrent MakeMKV rips
-# of CPU scheduling time entirely (they sat at ~3% CPU, no data written, for
-# over 10 minutes) the first time ENCODE_JOBS=4 actually played out for
-# real. Capping threads per job keeps a fixed ceiling regardless of how many
-# siblings happen to still be running, so ripping always has headroom.
+# Caps x264's threads per job, so a job left running alone can't take every
+# core and starve the rips (README, "Encoding throughput").
 ENCODE_THREADS = _env_int("ENCODE_THREADS", max(1, (os.cpu_count() or 4) // ENCODE_JOBS))
 
-# Only helps on interlaced sources (older TV masters, some DVD). Leave empty
-# for progressive film/Blu-ray sources - decombing a progressive source can
-# introduce artefacts that were never there. Verify on one disc either way.
+# HandBrake's deinterlace flags, e.g. "--comb-detect --decomb". Only helps
+# on interlaced sources (older TV masters, some DVD). Leave empty for
+# progressive film/Blu-ray sources - decombing a progressive source can
+# introduce artefacts that were never there. Check one disc either way.
 DEINTERLACE_ARGS = _env("DEINTERLACE_ARGS", "").split()
 
 # ---- encoding: audio (CD) ------------------------------------------------
-# Lossless, so this is a format choice, not a quality dial. "flac" needs the
-# flac(1) binary; falls back to ffmpeg if that's what's installed, and to a
-# plain copy of the WAV if neither is - see encode.py.
+# Lossless, so this is a format choice, not a quality dial. "flac" uses the
+# flac(1) binary, or ffmpeg if that's what's installed; any other format
+# needs ffmpeg. With no encoder for it, tracks are copied as .wav instead
+# (encode.audio_ext).
 AUDIO_FORMAT = _env("AUDIO_FORMAT", "flac")
 
 NOTIFY_ENCODES = _env("NOTIFY_ENCODES", "0") == "1"
@@ -199,7 +182,7 @@ NOTIFY_ENCODES = _env("NOTIFY_ENCODES", "0") == "1"
 # ---- bare `backcrack` launches everything ---------------------------------
 # Toggle any of these off to run that piece by hand instead (its own
 # terminal tab, a separate machine, whatever) - `backcrack ripd`/`encd`/
-# `watch` always still work standalone regardless of these.
+# `sortd`/`watch` always still work standalone regardless of these.
 LAUNCH_RIPD = _env("LAUNCH_RIPD", "1") == "1"
 LAUNCH_ENCD = _env("LAUNCH_ENCD", "1") == "1"
 LAUNCH_SORTD = _env("LAUNCH_SORTD", "1") == "1"
@@ -235,8 +218,8 @@ MAX_RETRIES = _env_int("MAX_RETRIES", 3)
 
 # ---- settings exposed to `backcrack watch`'s settings screen -------------
 # (env var, type, one-line label). Add a tuple here for any setting above
-# that should be user-editable live - type is "str", "int", "bool", or
-# "path". Nothing else in the pipeline reads this list; it's UI metadata only.
+# that should be editable there - type is "str", "int", "bool", or "path".
+# Nothing else in the pipeline reads this list; it's UI metadata only.
 SETTINGS = [
     ("LIBRARY", "path", "Library root"),
     ("RIP_MODE", "str", "Rip mode (titles / video_ts)"),

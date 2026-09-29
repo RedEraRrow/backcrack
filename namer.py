@@ -1,23 +1,30 @@
 #!/usr/bin/env python3
-"""namer.py - finalize a completed season for a media server: rename each
-disc's encoded/ episodes to "SxxExx Title.mkv" (verified titles from
-episodes.map, one season per block, in broadcast order) and move them up
-to the season folder directly, and consolidate every disc's extras/ into
-one season-level featurettes/. Matches Jellyfin/Kodi's expected layout -
-Series/Season XX/SxxExx.ext, extras in a *recognized* type folder
+"""namer.py - finalise a completed season for a media server: rename each
+disc's encoded/ episodes to "SxxExx Title.mkv" (titles from episodes.map,
+one season per block, in broadcast order) and move them up to the season
+folder directly, and consolidate every disc's extras/ into one season-level
+featurettes/. Matches Jellyfin/Kodi's expected layout -
+Series/Season XX/SxxExx.ext, extras in a *recognised* type folder
 (featurettes/behind the scenes/deleted scenes/etc, not a bare "extras",
 which isn't one of them) directly under the season, not nested under a
 per-disc folder.
 
-Only touches a season whose encoded-file count exactly matches its title
-count - a mismatch means something's still missing or extra (a disc still
-ripping, an unencoded title, a wrongly-deduped one), and guessing the
-mapping anyway would silently mislabel every episode after the gap. Each
-disc folder is removed once empty; leaves anything it doesn't recognize in
-place rather than guessing.
+Then deletes each disc's source/ (the lossless rip), but only for a disc
+whose encoded episodes all moved into the season, and prints each source/
+it deletes or keeps.
 
-    ./namer.py              finalize every season episodes.map covers
-    ./namer.py "Season 4"   just one season
+Only touches a season whose encoded-file count exactly matches its title
+count, with no empty or still-encoding file among them - a mismatch means
+something's still missing or extra (a disc still ripping, an unencoded
+title, a wrongly-deduped one), and guessing the mapping anyway would
+silently mislabel every episode after the gap. Each disc folder is removed
+once empty; leaves anything it doesn't recognise in place rather than
+guessing.
+
+Assumes the default layout: LIBRARY/Season N/<disc>/{encoded,extras,source}.
+
+    namer              finalise every season episodes.map covers
+    namer "Season 4"   just one season
 """
 import re
 import shutil
@@ -58,7 +65,7 @@ def safe(title: str) -> str:
     return title.replace("/", "-").replace(":", " -")
 
 
-FEATURETTES = "featurettes"   # a Jellyfin/Kodi-recognized extras type - "extras" itself isn't one
+FEATURETTES = "featurettes"   # a Jellyfin/Kodi-recognised extras type - "extras" itself isn't one
 
 
 def _move_with_thumb(src: Path, dest: Path) -> bool:
@@ -109,7 +116,7 @@ def rename_season(season_dir: Path, titles: list) -> None:
             moved.add(f)
 
     # Consolidate every disc's extras/ into one season-level featurettes/ -
-    # Jellyfin looks for a recognized extras-type folder directly under the
+    # Jellyfin looks for a recognised extras-type folder directly under the
     # season, not nested one level deeper under a disc.
     featurettes = season_dir / FEATURETTES
     for d in discs:

@@ -4,7 +4,7 @@ background and opens the live TUI - everything you need for a morning of
 ripping, one command. Toggle LAUNCH_RIPD / LAUNCH_ENCD / LAUNCH_WATCH in
 backcrack/config.py (or as env vars) to run any of them by hand instead.
 
-    backcrack             ripd + encd in the background, then the live TUI
+    backcrack             ripd + encd + sortd in the background, then the live TUI
     backcrack ripd
     backcrack encd
     backcrack status
@@ -13,9 +13,10 @@ backcrack/config.py (or as env vars) to run any of them by hand instead.
     backcrack swapd
     backcrack titles "/path/to/disc"
     backcrack diskspeed
+    backcrack namer ["Season N"]
 
-Settings are unchanged - still env vars read by backcrack/config.py
-(LIBRARY=, RIP_MODE=, etc.), same as running each tool directly:
+Settings come from env vars, then settings.env, then backcrack/config.py's
+defaults, the same as running each tool directly:
 
     LIBRARY=~/Media/rips backcrack ripd
 """

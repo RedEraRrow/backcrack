@@ -4,8 +4,8 @@ and how the current thresholds classify it. Run this on the first disc of
 each kind before trusting a whole shelf of them. Video discs only - an audio
 CD's tracks are unambiguous; list them with `cdparanoia -Q -d <device>`.
 
-    ./titles.py "/path/to/library/Season 1/Disc 1"
-    ./titles.py /Volumes/SOME_LABEL             # works on a mounted disc too
+    titles "/path/to/library/Season 1/Disc 1"
+    titles /Volumes/SOME_LABEL             # works on a mounted disc too
 """
 import sys
 from pathlib import Path
@@ -17,7 +17,7 @@ from backcrack.lib import classify, file_duration, hb_json
 
 def main() -> None:
     if len(sys.argv) < 2:
-        print("usage: ./titles.py '<disc folder or /Volumes/LABEL>'", file=sys.stderr)
+        print("usage: titles '<disc folder or /Volumes/LABEL>'", file=sys.stderr)
         sys.exit(1)
     target = Path(sys.argv[1])
     src = target / "VIDEO_TS" if (target / "VIDEO_TS").is_dir() else target
