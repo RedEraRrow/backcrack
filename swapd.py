@@ -10,7 +10,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backcrack import config as cfg
-from backcrack.lib import find_daemons, log, notify, ps_listing, spawn_daemon, stop_daemons
+from backbone.procs import ps_listing
+from backcrack.lib import find_daemons, log, notify, spawn_daemon, stop_daemons
 
 HERE = Path(__file__).resolve().parent
 SWAPLOG = cfg.STATE / "swap.log"

@@ -30,7 +30,9 @@ from backbone.ui import (
 from backcrack import config as cfg
 from backcrack.disc import DVD_1X_BPS
 from backcrack.encode import PART
-from backcrack.lib import class_file_counts, count_entries, disk_free, ps_listing, stop_daemons
+from backbone.files import count_entries, disk_free
+from backbone.procs import ps_listing
+from backcrack.lib import class_file_counts, stop_daemons
 
 NAV_STACK[:] = ["backcrack", "watch"]
 

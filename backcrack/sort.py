@@ -12,7 +12,8 @@ from pathlib import Path
 
 from . import config as cfg
 from . import pattern
-from .lib import log, notify, ps_listing
+from backbone.procs import ps_listing
+from .lib import log, notify
 
 SORTLOG = cfg.STATE / "sort.log"
 QUIET_S = 90  # a dir touched more recently than this is live

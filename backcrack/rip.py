@@ -11,6 +11,7 @@ from typing import Optional
 from . import config as cfg
 from . import disc
 from . import pattern
+from backbone.notify import chime
 from backbone.ui import dir_size_kb, human_gb
 from .lib import log, notify
 
@@ -70,10 +71,6 @@ def eject_disc(cdev: str, label: str) -> bool:
     return not disc_present(cdev)
 
 
-def _play_done_sound():
-    if subprocess.run(["afplay", "/System/Library/Sounds/Glass.aiff"],
-                       capture_output=True, timeout=10).returncode != 0:
-        print("\a", end="")
 
 
 def already_handled(label: str, cdev: str) -> bool:
@@ -180,7 +177,7 @@ def finish_rip(label: str, dest: Path, cdev: str, ok: bool, mins: int, kind: str
                 subprocess.run(["diskutil", "mountDisk", cdev], capture_output=True, timeout=30)
             notify(f"backcrack - {label} failed, retrying",
                    f"Attempt {fails} of {cfg.MAX_RETRIES}. Disc left in; it retries itself.", "default", "warning")
-    _play_done_sound()
+    chime()
 
 
 def rip_video_disc(dev: str, label: str) -> None:

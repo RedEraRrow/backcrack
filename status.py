@@ -7,7 +7,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backcrack import config as cfg
 from backbone.ui import dir_size_kb, human_gb
-from backcrack.lib import class_file_counts, count_entries, disk_free, find_daemons
+from backbone.files import count_entries, disk_free
+from backcrack.lib import class_file_counts, find_daemons
 
 
 def main() -> None:
