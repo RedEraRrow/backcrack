@@ -90,13 +90,16 @@ def auto_video_tokens(label: str) -> Optional[dict]:
 # track01.flac etc. Add a MusicBrainz recording-list lookup here if you want
 # real track names.
 def auto_audio_tokens(dev: Optional[str]) -> Optional[dict]:
-    fields = disc.cd_discid(dev) if dev else []
-    if not fields:
+    toc = disc.cd_toc(dev) if dev else None
+    if not toc:
         return None
-    discid = fields[0]
+    # The MusicBrainz disc id (cd-discid's own id is freedb's, which MusicBrainz
+    # doesn't know), plus the toc so a near match is found when there's no exact one.
+    toc_param = "+".join(str(n) for n in (toc[0], toc[1], toc[2], *toc[3]))
     try:
         req = urllib.request.Request(
-            f"https://musicbrainz.org/ws/2/discid/{discid}?fmt=json&inc=artist-credits",
+            f"https://musicbrainz.org/ws/2/discid/{disc.musicbrainz_discid(toc)}"
+            f"?toc={toc_param}&fmt=json&inc=artist-credits",
             headers={"User-Agent": "backcrack/1.0 (local ripper)"},
         )
         with urllib.request.urlopen(req, timeout=10) as resp:

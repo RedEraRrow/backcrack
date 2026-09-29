@@ -115,7 +115,8 @@ NTFY_SERVER = _env("NTFY_SERVER", "https://ntfy.sh")
 # The default suits one particular show; set LIBRARY rather than rely on it.
 LIBRARY = Path(_env("LIBRARY", str(Path.home() / "Media" / "TV" / "House (2004)"))).expanduser()
 
-MKVCON = _env("MKVCON", "/Applications/MakeMKV.app/Contents/MacOS/makemkvcon")
+# MKV is diskspeed's old name for it, still honoured.
+MKVCON = _env("MKVCON", _env("MKV", "/Applications/MakeMKV.app/Contents/MacOS/makemkvcon"))
 HBCLI = _env("HBCLI", shutil.which("HandBrakeCLI") or "/opt/homebrew/bin/HandBrakeCLI")
 CDPARANOIA = _env("CDPARANOIA", shutil.which("cdparanoia") or "")
 CD_DISCID = _env("CD_DISCID", shutil.which("cd-discid") or "")

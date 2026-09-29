@@ -174,6 +174,10 @@ def finish_rip(label: str, dest: Path, cdev: str, ok: bool, mins: int, kind: str
             notify(f"backcrack - {label} GAVE UP",
                    f"Failed {fails} times. Delete .ripstate/gaveup-{label} to try again.", "high", "rotating_light")
         else:
+            if kind == "video":
+                # The rip unmounted the disc, and video discs are found by their
+                # mounted volume: mount it again so the next poll retries it.
+                subprocess.run(["diskutil", "mountDisk", cdev], capture_output=True, timeout=30)
             notify(f"backcrack - {label} failed, retrying",
                    f"Attempt {fails} of {cfg.MAX_RETRIES}. Disc left in; it retries itself.", "default", "warning")
     _play_done_sound()

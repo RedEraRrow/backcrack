@@ -79,6 +79,43 @@ def cd_discid(rdev: str) -> list:
         return []
 
 
+def cd_toc(rdev: str):
+    """The CD's table of contents as MusicBrainz wants it: (first track, last
+    track, lead-out, [track offsets]) in sectors, or None. Uses cd-discid's
+    exact --musicbrainz output; an older cd-discid only gives the length in
+    whole seconds, so the lead-out is then approximate (MusicBrainz's toc
+    lookup still finds near matches)."""
+    if not cfg.CD_DISCID:
+        return None
+    try:
+        out = subprocess.run([cfg.CD_DISCID, "--musicbrainz", rdev], capture_output=True, text=True, timeout=15).stdout.split()
+    except (OSError, subprocess.TimeoutExpired):
+        out = []
+    nums = [int(x) for x in out if x.isdigit()]
+    if len(nums) >= 3 and nums[0] == len(nums) - 2:          # count, offsets..., lead-out
+        return 1, nums[0], nums[-1], nums[1:-1]
+    fields = cd_discid(rdev)                                 # freedb: id, count, offsets..., seconds
+    if len(fields) < 3 or not fields[1].isdigit():
+        return None
+    n = int(fields[1])
+    try:
+        offsets = [int(x) for x in fields[2:2 + n]]
+        return 1, n, int(fields[2 + n]) * 75, offsets
+    except (ValueError, IndexError):
+        return None
+
+
+def musicbrainz_discid(toc) -> str:
+    """MusicBrainz's disc id for a (first, last, lead-out, offsets) toc: the
+    SHA-1 of the toc in fixed-width hex, base64 with MusicBrainz's alphabet."""
+    import base64
+    first, last, leadout, offsets = toc
+    frames = [leadout] + list(offsets) + [0] * (99 - len(offsets))
+    text = f"{first:02X}{last:02X}" + "".join(f"{f:08X}" for f in frames)
+    digest = base64.b64encode(hashlib.sha1(text.encode()).digest()).decode()
+    return digest.translate(str.maketrans("+/=", "._-"))
+
+
 def audio_label(rdev: str):
     """A name for the CD in `rdev` that stays the same whichever drive it is
     in: "AudioCD-<n>tracks-<id>". The id is cd-discid's, or a hash of
