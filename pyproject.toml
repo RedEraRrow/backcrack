@@ -6,12 +6,11 @@ build-backend = "setuptools.build_meta"
 name = "backcrack"
 version = "0.1.0"
 description = "CD/DVD/Blu-ray rip pipeline - MakeMKV/HandBrake for video, cdparanoia for audio, dynamic %token% library patterning."
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
-# Not on PyPI - installed from its sibling checkout, at this absolute path
-# (see README, Install). If backbone is already installed, pip sees the
-# requirement satisfied and leaves it.
-dependencies = ["backbone @ file:///Users/local/backpack/backbone"]
+# Not on PyPI. If backbone is already installed (editable, from a checkout),
+# pip sees the requirement satisfied and leaves it.
+dependencies = ["backbone @ git+https://github.com/RedEraRrow/backbone.git"]
 
 [project.scripts]
 backcrack = "cli:main"

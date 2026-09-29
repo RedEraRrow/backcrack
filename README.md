@@ -4,19 +4,17 @@ Insert discs, get pinged, swap discs. Encoding happens on its own in the
 background. Works on CDs, DVDs, and Blu-rays - the disc in the drive tells
 the pipeline which path to take.
 
-Python, stdlib only apart from `backbone`, the shared terminal-UI library
-`watch` draws itself with (installed from its sibling checkout, not from
-PyPI). Requires Python 3.9+ (macOS ships one; `python3 --version` to check).
+Python, stdlib only apart from `backbone`, the library the back* tools share
+(`watch`'s screen, process and notification helpers). Requires Python 3.10+
+(`python3 --version` to check).
 
 ## Install
 
-backbone has to be checked out next to this repo, as `../backbone`, and
-installed first. `pyproject.toml` names it by the absolute path
-`/Users/local/backpack/backbone`; edit that line if your checkouts live
-somewhere else.
-
-    pip3 install -e ../backbone
     pip3 install -e .
+
+pip fetches backbone from GitHub. If you're changing backbone too, install
+your checkout of it editable first (`pip3 install -e ../backbone`) and pip
+leaves it in place.
 
 That puts `backcrack`, `ripd`, `encd`, `sortd`, `watch`, `status`, `swapd`,
 `titles`, `diskspeed` and `namer` on your PATH as plain commands: no `./`,
