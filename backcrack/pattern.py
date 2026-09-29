@@ -1,4 +1,4 @@
-"""pattern.py - dynamic %token% destination patterning.
+"""Dynamic %token% destination patterning.
 See docs/pattern-tokens.md for the token vocabulary and worked examples.
 """
 import json
@@ -7,8 +7,8 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
-from . import config as cfg
-from . import disc
+from backcrack import config as cfg
+from backcrack import disc
 
 
 def render_pattern(pattern: str, tokens: dict) -> Optional[str]:

@@ -1,4 +1,4 @@
-"""sort.py - reconcile UNSORTED/ once a disc's tokens become resolvable
+"""Reconcile UNSORTED/ once a disc's tokens become resolvable
 (a labels.map line was added, or the parser improved). Shared by sortd.py.
 
 Four independent guards before touching a folder. A previous version of this
@@ -10,10 +10,10 @@ import subprocess
 import time
 from pathlib import Path
 
-from . import config as cfg
-from . import pattern
+from backcrack import config as cfg
+from backcrack import pattern
 from backbone.procs import ps_listing
-from .lib import log, notify
+from backcrack.common import log, notify
 
 SORTLOG = cfg.STATE / "sort.log"
 QUIET_S = 90  # a dir touched more recently than this is live

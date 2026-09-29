@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""sortd.py - watches UNSORTED/ and files discs into their pattern-resolved
+"""Watches UNSORTED/ and files discs into their pattern-resolved
 destination as soon as they become resolvable (you added a labels.map line,
 or the parser improved). Merges a split disc back together if one ever occurs.
 
@@ -8,14 +7,11 @@ or the parser improved). Merges a split disc back together if one ever occurs.
     DRYRUN=1 sortd          say what it would do, change nothing
 """
 import os
-import sys
 import time
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backcrack import config as cfg
 from backcrack.sort import reconcile, SORTLOG
-from backcrack.lib import log
+from backcrack.common import log
 
 INTERVAL = cfg.SORT_INTERVAL
 

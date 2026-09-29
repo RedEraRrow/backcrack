@@ -1,4 +1,4 @@
-"""rip.py - rip a single disc (video or audio), eject it, and record the
+"""Rip a single disc (video or audio), eject it, and record the
 outcome. Shared by ripd.py; the two rip_*_disc functions are the only
 format-specific code in here.
 """
@@ -8,12 +8,12 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from . import config as cfg
-from . import disc
-from . import pattern
+from backcrack import config as cfg
+from backcrack import disc
+from backcrack import pattern
 from backbone.notify import chime
 from backbone.ui import dir_size_kb, human_gb
-from .lib import log, notify
+from backcrack.common import log, notify
 
 
 def disc_present(cdev: str) -> bool:

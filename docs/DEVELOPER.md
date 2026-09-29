@@ -14,7 +14,7 @@
   else (locking, retry, eject, notify, queueing, the watch dashboard) is
   format-agnostic and stays that way on purpose. Adding a third disc kind
   should only mean adding a branch at those three points, not touching
-  `lib.py`/`watch.py`.
+  `common.py`/`watch.py`.
 - **Pattern engine has no opinion about your library shape.** `dest_for`
   (`backcrack/pattern.py`) doesn't know what a season or an album is - it
   substitutes whatever tokens it's handed into whatever pattern you
@@ -40,10 +40,45 @@
   original shell version. It's slower than SQLite and nobody notices,
   because a disc rip takes minutes; readable-with-`cat` state that survives
   a crash mid-write is worth more here than a query language.
-- **Shared helpers live in `backcrack/lib.py`**: logging, ntfy, finding and
-  starting daemons (`find_daemons`, `spawn_daemon`, `stop_daemons`), the
-  process listing, disk free, the pipeline counts. Terminal formatting
-  (`human_gb`, `dir_size_kb`, colours, the hint bar) comes from backbone.
+- **Anything another tool could use goes in backbone**: logging, ntfy,
+  starting, finding and stopping processes, disk free, terminal formatting,
+  colours, the hint bar. `backcrack/common.py` binds those to backcrack's
+  settings (`notify`, `find_daemons`, `spawn_daemon`, `stop_daemons`) and
+  holds what only a ripper needs: duration classes, HandBrake scans, the
+  library's class folders.
+
+## Layout
+
+```
+backcrack/
+├── pyproject.toml          # Dependencies and every command below
+├── backcrack/
+│   ├── __main__.py         # `python3 -m backcrack`
+│   ├── cli.py              # `backcrack`: starts the daemons and opens watch, or runs one command
+│   ├── ripd.py             # Daemons, one per concern: rip, encode, reconcile UNSORTED/,
+│   ├── encd.py             #   and upgrade ripd mid-run
+│   ├── sortd.py
+│   ├── swapd.py
+│   ├── watch.py            # The live dashboard and settings screen
+│   ├── status.py           # One-shot text snapshot of the same
+│   ├── titles.py           # Tools: list a disc's titles, drive read speed,
+│   ├── diskspeed.py        #   name encoded episodes
+│   ├── namer.py
+│   ├── config.py           # Every setting, its default and where it's read from
+│   ├── disc.py             # Drives and discs: what's in them, TOC, MusicBrainz disc ID
+│   ├── rip.py              # Rip one video or audio disc (ripd's work)
+│   ├── encode.py           # Encode one queued job (encd's work)
+│   ├── sort.py             # Reconcile UNSORTED/ (sortd's work)
+│   ├── pattern.py          # %token% destination patterns and their auto-detected tokens
+│   └── common.py           # backbone bound to backcrack's settings, plus ripper-only helpers
+├── tests/                  # test_*.py, each runnable on its own
+└── docs/                   # This guide and the pattern token reference
+```
+
+Each command module has a `main()`, and `[project.scripts]` maps the command
+name to it. Daemons started from `watch` or `backcrack` run as
+`python3 -m backcrack.<name>`, so they are found and stopped however they were
+started.
 
 ## Why Python over shell for this one
 

@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""titles.py - show every title on a video disc (or a ripped disc folder)
+"""Show every title on a video disc (or a ripped disc folder)
 and how the current thresholds classify it. Run this on the first disc of
 each kind before trusting a whole shelf of them. Video discs only - an audio
 CD's tracks are unambiguous; list them with `cdparanoia -Q -d <device>`.
@@ -10,9 +9,8 @@ CD's tracks are unambiguous; list them with `cdparanoia -Q -d <device>`.
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backcrack import config as cfg
-from backcrack.lib import classify, file_duration, hb_json
+from backcrack.common import classify, file_duration, hb_json
 
 
 def main() -> None:

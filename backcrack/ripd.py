@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""ripd.py - watch every optical drive, rip whatever's in it (CD, DVD, or
+"""Watch every optical drive, rip whatever's in it (CD, DVD, or
 Blu-ray - detected automatically), sort it into the library, eject, ping
 ntfy, hand it to the encoder. Ctrl-C to stop.
 
@@ -8,15 +7,13 @@ ntfy, hand it to the encoder. Ctrl-C to stop.
 Insert discs in any drive, in any order. Already-ripped discs eject at once.
 """
 import os
-import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backcrack import config as cfg
 from backcrack import disc
 from backcrack.rip import rip_video_disc, rip_audio_disc
-from backcrack.lib import find_daemons, log
+from backcrack.common import find_daemons, log
 
 
 def _lock_path(dev: str) -> Path:

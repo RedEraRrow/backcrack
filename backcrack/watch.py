@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""watch.py - live view of the rip + encode pipeline. Works the same for a
+"""Live view of the rip + encode pipeline. Works the same for a
 CD, DVD or Blu-ray job - the folders it watches (source/, encoded/, extras/)
 look the same regardless of format. Percentages are relative to the disc
 actually in the drive, read from its own volume size.
@@ -14,15 +13,13 @@ memory for the life of the process.
 import os
 import re
 import subprocess
-import sys
 import threading
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backbone.nav import NAV_STACK
 from backbone import ui
-from backbone.prompt_core import hint, run_dashboard
+from backbone.prompt.core import hint, run_dashboard
 from backbone.ui import (
     Colors as C, bar, clip_ansi, content_width, dir_size_kb, get_terminal_width,
     header_box, human_gb, rate_of_change, sparkline, spinner, truncate_text,
@@ -32,7 +29,7 @@ from backcrack.disc import DVD_1X_BPS
 from backcrack.encode import PART
 from backbone.files import count_entries, disk_free
 from backbone.procs import ps_listing
-from backcrack.lib import class_file_counts, stop_daemons
+from backcrack.common import class_file_counts, stop_daemons
 
 NAV_STACK[:] = ["backcrack", "watch"]
 

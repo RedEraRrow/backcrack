@@ -1,14 +1,10 @@
-#!/usr/bin/env python3
-"""status.py - where the whole job is up to. Safe to run any time."""
+"""Where the whole job is up to. Safe to run any time."""
 import subprocess
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backcrack import config as cfg
 from backbone.ui import dir_size_kb, human_gb
 from backbone.files import count_entries, disk_free
-from backcrack.lib import class_file_counts, find_daemons
+from backcrack.common import class_file_counts, find_daemons
 
 
 def main() -> None:

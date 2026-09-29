@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""cli.py - Bare `backcrack` starts ripd, encd and sortd in the background
+"""Bare `backcrack` starts ripd, encd and sortd in the background
 and opens the live TUI. Toggle LAUNCH_RIPD / LAUNCH_ENCD / LAUNCH_SORTD /
 LAUNCH_WATCH in settings.env (or as env vars) to run any of them by hand instead.
 
@@ -22,17 +21,17 @@ defaults, the same as running each tool directly:
 import argparse
 import sys
 
-import diskspeed
-import encd
-import namer
-import ripd
-import sortd
-import status
-import swapd
-import titles
-import watch
+from backcrack import diskspeed
+from backcrack import encd
+from backcrack import namer
+from backcrack import ripd
+from backcrack import sortd
+from backcrack import status
+from backcrack import swapd
+from backcrack import titles
+from backcrack import watch
 from backcrack import config as cfg
-from backcrack.lib import find_daemons, spawn_daemon
+from backcrack.common import find_daemons, spawn_daemon
 
 COMMANDS = {
     "ripd": ripd.main,

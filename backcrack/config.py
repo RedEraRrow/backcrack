@@ -1,4 +1,4 @@
-"""config.py - settings for the backcrack rip pipeline, and their defaults.
+"""Settings for the backcrack rip pipeline, and their defaults.
 
 Each value is read from its environment variable first, then from
 settings.env in CONFIG_DIR, then falls back to the default here. So a

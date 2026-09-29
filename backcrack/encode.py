@@ -1,11 +1,11 @@
-"""encode.py - turn a ripped disc's source/ into encoded/ (and extras/ for
+"""Turn a ripped disc's source/ into encoded/ (and extras/ for
 video). Shared by encd.py.
 """
 import subprocess
 from pathlib import Path
 
-from . import config as cfg
-from .lib import log, notify, classify_class, hb_titles, file_duration
+from backcrack import config as cfg
+from backcrack.common import log, notify, classify_class, hb_titles, file_duration
 
 
 PART = ".part"   # an encode in progress is written as <stem>.part<suffix>

@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""namer.py - finalise a completed season for a media server: rename each
+"""Finalise a completed season for a media server: rename each
 disc's encoded/ episodes to "SxxExx Title.mkv" (titles from episodes.map,
 one season per block, in broadcast order) and move them up to the season
 folder directly, and consolidate every disc's extras/ into one season-level
@@ -31,7 +30,6 @@ import shutil
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backcrack import config as cfg
 from backcrack.encode import PART
 

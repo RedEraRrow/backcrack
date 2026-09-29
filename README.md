@@ -27,8 +27,8 @@ means something else in your shell, rename that one entry in
 use the `backcrack <command>` form below, which always works.
 
 Without installing backcrack itself, every command still runs from the
-checkout (`./ripd.py`, `./watch.py` and so on), as long as backbone is
-installed.
+checkout as `python3 -m backcrack <command>` (`python3 -m backcrack watch`),
+as long as backbone is installed.
 
 ## Before the first disc
 
@@ -220,7 +220,7 @@ retried sector or a title MakeMKV gave up on shows.
 ## Upgrading ripd mid-run
 
 `swapd` swaps in a new `ripd.py` without interrupting a rip: save the new
-version as `ripd.py.new` beside `ripd.py` and run `swapd`. It waits until no
+version as `backcrack/ripd.py.new` beside `backcrack/ripd.py` and run `swapd`. It waits until no
 drive is ripping (giving up after 4 hours), swaps the file in, restarts
 `ripd` and exits. `swap.log` in `.ripstate` records what it did.
 

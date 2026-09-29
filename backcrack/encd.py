@@ -1,19 +1,16 @@
-#!/usr/bin/env python3
-"""encd.py - encode worker. Video jobs go through HandBrake, sorting the
+"""Encode worker. Video jobs go through HandBrake, sorting the
 main feature and special features into separate folders; audio jobs get
 compressed losslessly. Start it once and leave it; idle is normal. Safe to
 stop and restart - finished files are never redone.
 
     encd
 """
-import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backcrack import config as cfg
 from backcrack.encode import audio_ext, process_job
-from backcrack.lib import log
+from backcrack.common import log
 
 
 def main() -> None:

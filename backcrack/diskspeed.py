@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""diskspeed.py - measure sustained read throughput of every loaded optical
+"""Measure sustained read throughput of every loaded optical
 drive. It's a raw block read, so any disc works. Speeds are shown in MB/s and
 in DVD "x" units (1x = 1,385,000 bytes/s), so a CD or Blu-ray reads as a
 multiple of DVD 1x, not of its own format's 1x. Reports live progress and
@@ -22,7 +21,6 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backcrack import config as cfg
 from backcrack.disc import DVD_1X_BPS, cooked, mkv_drives
 

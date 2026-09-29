@@ -1,17 +1,14 @@
-#!/usr/bin/env python3
-"""swapd.py - upgrades a running ripper without interrupting a rip. Stage
+"""Upgrades a running ripper without interrupting a rip. Stage
 the new version as ripd.py.new beside ripd.py, run swapd, and it waits until
 no drive is ripping, swaps ripd.py.new into place and restarts ripd. Exits
 after.
 """
-import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backcrack import config as cfg
 from backbone.procs import ps_listing
-from backcrack.lib import find_daemons, log, notify, spawn_daemon, stop_daemons
+from backcrack.common import find_daemons, log, notify, spawn_daemon, stop_daemons
 
 HERE = Path(__file__).resolve().parent
 SWAPLOG = cfg.STATE / "swap.log"

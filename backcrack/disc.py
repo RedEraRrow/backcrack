@@ -1,4 +1,4 @@
-"""disc.py - find discs sitting in optical drives, of any kind, and tell them
+"""Find discs sitting in optical drives, of any kind, and tell them
 apart. All macOS-specific (diskutil, drutil, mount) - the disc hardware layer
 is the one part of this pipeline that doesn't travel to another OS for free.
 """
@@ -8,7 +8,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from . import config as cfg
+from backcrack import config as cfg
 
 
 # Optical drive speeds are quoted in multiples of DVD 1x.

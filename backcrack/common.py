@@ -1,13 +1,12 @@
-"""lib.py - format-agnostic helpers shared by every daemon and tool."""
+"""backbone's helpers bound to backcrack's settings, and what only a ripper needs."""
 import json
 import subprocess
-from pathlib import Path
 
 from backbone.files import log_line
 from backbone.notify import ntfy
-from backbone.procs import find_processes, spawn_script, stop_processes
+from backbone.procs import find_processes, spawn_module, stop_processes
 
-from . import config as cfg
+from backcrack import config as cfg
 
 
 # The general parts live in backbone; these bind backcrack's own settings.
@@ -31,8 +30,8 @@ def stop_daemons(*names: str) -> int:
 
 
 def spawn_daemon(name: str) -> None:
-    """Start `name`.py from the checkout in the background, output to STATE/<name>.out."""
-    spawn_script(Path(__file__).resolve().parent.parent / f"{name}.py", cfg.STATE / f"{name}.out")
+    """Start the `name` daemon in the background, output to STATE/<name>.out."""
+    spawn_module(f"backcrack.{name}", cfg.STATE / f"{name}.out")
 
 
 def class_folders() -> list:
