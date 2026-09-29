@@ -3,9 +3,9 @@
 destination as soon as they become resolvable (you added a labels.map line,
 or the parser improved). Merges a split disc back together if one ever occurs.
 
-    ./sortd.py              daemon, polls every 5s
-    ONCE=1 ./sortd.py       single pass
-    DRYRUN=1 ./sortd.py     say what it would do, change nothing
+    sortd                   daemon, polls every SORT_INTERVAL seconds (default 5)
+    ONCE=1 sortd            single pass
+    DRYRUN=1 sortd          say what it would do, change nothing
 """
 import os
 import sys
@@ -17,7 +17,7 @@ from backcrack import config as cfg
 from backcrack.sort import reconcile, SORTLOG
 from backcrack.lib import log
 
-INTERVAL = int(os.environ.get("INTERVAL", 5))
+INTERVAL = cfg.SORT_INTERVAL
 
 
 def main() -> None:

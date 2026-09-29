@@ -112,13 +112,14 @@ NTFY_SERVER = _env("NTFY_SERVER", "https://ntfy.sh")
 # Where finished discs land. The layout beneath this is controlled by
 # PATTERN_VIDEO / PATTERN_AUDIO below, not fixed here - point LIBRARY at
 # whatever you're ripping this run (one show, one CD shelf, a mixed pile).
-LIBRARY = Path(_env("LIBRARY", str(Path.home() / "Media" / "TV" / "House (2004)")))
+LIBRARY = Path(_env("LIBRARY", str(Path.home() / "Media" / "TV" / "House (2004)"))).expanduser()
 
 MKVCON = _env("MKVCON", "/Applications/MakeMKV.app/Contents/MacOS/makemkvcon")
 HBCLI = _env("HBCLI", shutil.which("HandBrakeCLI") or "/opt/homebrew/bin/HandBrakeCLI")
 CDPARANOIA = _env("CDPARANOIA", shutil.which("cdparanoia") or "")
 CD_DISCID = _env("CD_DISCID", shutil.which("cd-discid") or "")
 FLAC = _env("FLAC", shutil.which("flac") or "")
+FFMPEG = _env("FFMPEG", shutil.which("ffmpeg") or "")
 
 # ---- rip mode (video discs: DVD, Blu-ray) -------------------------------
 # titles    MakeMKV rips each title to its own lossless MKV via dev: - gets
@@ -201,7 +202,22 @@ NOTIFY_ENCODES = _env("NOTIFY_ENCODES", "0") == "1"
 # `watch` always still work standalone regardless of these.
 LAUNCH_RIPD = _env("LAUNCH_RIPD", "1") == "1"
 LAUNCH_ENCD = _env("LAUNCH_ENCD", "1") == "1"
+LAUNCH_SORTD = _env("LAUNCH_SORTD", "1") == "1"
 LAUNCH_WATCH = _env("LAUNCH_WATCH", "1") == "1"
+
+# ---- watch, sortd, diskspeed ----------------------------------------------
+# WATCH_INTERVAL and SORT_INTERVAL fall back to a plain INTERVAL if one is set.
+WATCH_INTERVAL = float(_env("WATCH_INTERVAL", _env("INTERVAL", "1")))
+SORT_INTERVAL = _env_int("SORT_INTERVAL", int(_env("INTERVAL", "5")))
+TOTAL_DISCS = _env_int("TOTAL_DISCS", 0)       # discs in this run; 0 hides the percentage and ETA
+WINDOW = _env_int("WINDOW", 20)                # seconds of history behind watch's MB/s figure
+ACTIVE_S = _env_int("ACTIVE_S", 90)            # a source/ idle this long drops out of RIPPING
+FALLBACK_KB = _env_int("FALLBACK_KB", 7340032)  # disc size assumed until diskutil reports it
+READ_MB = _env_int("READ_MB", 600)             # diskspeed: how much to read per drive
+SKIP_MB = _env_int("SKIP_MB", 1000)            # diskspeed: where on the disc to start reading
+STALL_S = _env_int("STALL_S", 60)              # diskspeed: give up on a drive after this long without progress
+DISC_BYTES = _env_int("DISC_BYTES", 7_000_000_000)  # diskspeed: disc size for its minutes-per-disc estimate
+RESULTS = Path(_env("RESULTS", str(Path.home() / "diskspeed.txt")))
 
 # ---- dynamic patterning ---------------------------------------------------
 # Destination path under LIBRARY, built by substituting %token% once a
@@ -237,7 +253,11 @@ SETTINGS = [
     ("NOTIFY_ENCODES", "bool", "Notify on encode complete"),
     ("LAUNCH_RIPD", "bool", "Bare `backcrack` also launches ripd"),
     ("LAUNCH_ENCD", "bool", "Bare `backcrack` also launches encd"),
+    ("LAUNCH_SORTD", "bool", "Bare `backcrack` also launches sortd"),
     ("LAUNCH_WATCH", "bool", "Bare `backcrack` also launches watch"),
+    ("MIN_TITLE_S", "int", "Shortest title MakeMKV rips (seconds)"),
+    ("NTFY_TOPIC", "str", "ntfy topic (blank = no pushes)"),
+    ("NTFY_SERVER", "str", "ntfy server"),
 ]
 
 # Derived. Don't edit.
@@ -245,13 +265,21 @@ SETTINGS = [
 # overrides, and the per-season episode titles namer.py renames from.
 LABELS_MAP = CONFIG_DIR / "labels.map"
 EPISODES_MAP = CONFIG_DIR / "episodes.map"
-STATE = LIBRARY / ".ripstate"
-LOGDIR = STATE / "logs"
-QUEUE = STATE / "queue"
-DONEDIR = STATE / "done"
-ENCDONE = STATE / "encdone"
-RIPLOG = STATE / "rip.log"
-ENCLOG = STATE / "encode.log"
 
-for _d in (LIBRARY, STATE, LOGDIR, QUEUE, DONEDIR, ENCDONE):
-    _d.mkdir(parents=True, exist_ok=True)
+
+def use_library(path: Path) -> None:
+    """Point LIBRARY and every state path under it at `path`."""
+    global LIBRARY, STATE, LOGDIR, QUEUE, DONEDIR, ENCDONE, RIPLOG, ENCLOG
+    LIBRARY = path
+    STATE = LIBRARY / ".ripstate"
+    LOGDIR = STATE / "logs"
+    QUEUE = STATE / "queue"
+    DONEDIR = STATE / "done"
+    ENCDONE = STATE / "encdone"
+    RIPLOG = STATE / "rip.log"
+    ENCLOG = STATE / "encode.log"
+    for d in (LIBRARY, STATE, LOGDIR, QUEUE, DONEDIR, ENCDONE):
+        d.mkdir(parents=True, exist_ok=True)
+
+
+use_library(LIBRARY)

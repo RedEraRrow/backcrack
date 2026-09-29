@@ -3,7 +3,7 @@
 Blu-ray - detected automatically), sort it into the library, eject, ping
 ntfy, hand it to the encoder. Ctrl-C to stop.
 
-    ./ripd.py
+    ripd
 
 Insert discs in any drive, in any order. Already-ripped discs eject at once.
 """
@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backcrack import config as cfg
 from backcrack import disc
 from backcrack.rip import rip_video_disc, rip_audio_disc
-from backcrack.lib import log
+from backcrack.lib import find_daemons, log
 
 
 def _lock_path(dev: str) -> Path:
@@ -24,17 +24,10 @@ def _lock_path(dev: str) -> Path:
 
 
 def _try_lock(dev: str):
-    """Atomically claims the lock for `dev`, or None if it's already held.
+    """Claims the lock for `dev`, or returns None if it's already held.
 
-    O_CREAT|O_EXCL is one atomic syscall - unlike the old exists()-then-
-    touch() check, two ripd polls (even from two separate ripd processes
-    accidentally running against the same $LIBRARY - `backcrack ripd` run
-    directly alongside the one bare `backcrack` already spawned, say) can't
-    both "win" the same drive: whichever's os.open() actually reaches the
-    filesystem first succeeds, the other gets FileExistsError. That race
-    is exactly what let two makemkvcon instances read the same disc at
-    once - drive noise "like two reads out of sync" was two reads, out of
-    sync, for real.
+    O_CREAT|O_EXCL makes the claim atomic, so two polls (or two ripd
+    processes on the same $LIBRARY) can never both rip the same drive.
     """
     path = _lock_path(dev)
     try:
@@ -50,8 +43,17 @@ def main() -> None:
         print(f"WARNING: makemkvcon not found at {cfg.MKVCON} - video discs will fail.")
     if not cfg.CDPARANOIA:
         print("WARNING: cdparanoia not found - audio CDs will fail. brew install cdparanoia.")
+    if not cfg.CD_DISCID:
+        print("WARNING: cd-discid not found - audio CDs will go to UNSORTED/. brew install cd-discid.")
     if not cfg.NTFY_TOPIC:
-        print("WARNING: NTFY_TOPIC unset in config.py - no pushes will be sent.")
+        print("WARNING: NTFY_TOPIC is not set (env var or settings.env) - no pushes will be sent.")
+
+    # A lock left by a ripd that was killed rather than stopped with Ctrl-C
+    # would block its drive for good. With no other ripd running, every lock
+    # is stale.
+    if not find_daemons("ripd"):
+        for lock in cfg.STATE.glob("lock-*"):
+            lock.unlink(missing_ok=True)
 
     log(cfg.RIPLOG, f"ripd started - library: {cfg.LIBRARY}  video mode: {cfg.RIP_MODE}")
     print("Watching for discs. Insert them in any drive, in any order.\n")

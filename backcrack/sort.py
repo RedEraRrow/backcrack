@@ -112,6 +112,11 @@ def reconcile(dry_run: bool = False) -> None:
 
         # Target exists: merge anything the target doesn't already have, so
         # a disc split across both locations is healed rather than left broken.
+        # Files both sides hold stay in UNSORTED for a human; that is logged
+        # once, not on every pass.
+        stuck = cfg.STATE / f"mergestuck-{label}"
+        if stuck.exists():
+            continue
         log(SORTLOG, f"MERGE {label} into existing {rel}")
         for f in list(d.rglob("*")):
             if not f.is_file() or f.name == ".kind":
@@ -127,12 +132,16 @@ def reconcile(dry_run: bool = False) -> None:
         for sub in sorted(d.rglob("*"), key=lambda p: -len(p.parts)):
             if sub.is_dir() and not any(sub.iterdir()):
                 sub.rmdir()
-        if not d.exists():
+        if [p.name for p in d.iterdir()] in ([], [".kind"]):
+            (d / ".kind").unlink(missing_ok=True)
+            d.rmdir()
             requeue(d, target, label)
             log(SORTLOG, f"MERGE done for {label}")
             notify(f"backcrack - merged {rel}", f"{label} folded into its folder.", "low", "file_folder")
         else:
-            log(SORTLOG, f"MERGE incomplete for {label} - files remain in UNSORTED")
+            stuck.touch()
+            log(SORTLOG, f"MERGE incomplete for {label} - files remain in UNSORTED, reconcile by hand "
+                         f"and delete {stuck.name} to retry")
 
     try:
         unsorted.rmdir()

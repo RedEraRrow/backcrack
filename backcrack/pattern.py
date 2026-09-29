@@ -3,13 +3,12 @@ See docs/pattern-tokens.md for the token vocabulary and worked examples.
 """
 import json
 import re
-import shutil
-import subprocess
 import urllib.request
 from pathlib import Path
 from typing import Optional
 
 from . import config as cfg
+from . import disc
 
 
 def render_pattern(pattern: str, tokens: dict) -> Optional[str]:
@@ -91,15 +90,10 @@ def auto_video_tokens(label: str) -> Optional[dict]:
 # track01.flac etc. Add a MusicBrainz recording-list lookup here if you want
 # real track names.
 def auto_audio_tokens(dev: Optional[str]) -> Optional[dict]:
-    if not dev or not cfg.CD_DISCID:
+    fields = disc.cd_discid(dev) if dev else []
+    if not fields:
         return None
-    try:
-        out = subprocess.run([cfg.CD_DISCID, dev], capture_output=True, text=True, timeout=15).stdout
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if not out.strip():
-        return None
-    discid = out.split()[0]
+    discid = fields[0]
     try:
         req = urllib.request.Request(
             f"https://musicbrainz.org/ws/2/discid/{discid}?fmt=json&inc=artist-credits",

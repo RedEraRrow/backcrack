@@ -1,8 +1,6 @@
 """rip.py - rip a single disc (video or audio), eject it, and record the
 outcome. Shared by ripd.py; the two rip_*_disc functions are the only
-format-specific branches in here - everything else (locking, retry, eject,
-notify, queueing) is format-agnostic on purpose. Adding a third disc kind
-should only ever mean adding a third branch here.
+format-specific code in here.
 """
 import re
 import subprocess
@@ -108,15 +106,10 @@ def _dest_has_output(dest: Path) -> bool:
 
 
 def _make_dest(dest: Path, label: str) -> Path:
-    """dest, cleared and (re)created - unless it already has finished output,
-    in which case a fresh sibling folder is used instead and the collision is
-    logged loudly for a human to reconcile. `shutil.rmtree(dest)` used to run
-    unconditionally here: a second disc (or a labels.map entry added after
-    the first disc's own rip) routing to an already-completed dest silently
-    destroyed the finished rip before the new one even started - confirmed
-    for real on Season 7 Disc 2, where the replacement disc then turned out
-    to be the physically damaged one (see the titles-saved check below) and
-    the original, good rip was gone for good.
+    """dest, cleared and (re)created. If dest already holds finished output
+    (another disc, or a re-rip, routing to the same folder), it is left alone:
+    the rip goes to a sibling "<name> (<label>)" folder instead, and the
+    collision is logged and pushed for a human to reconcile.
     """
     if dest.exists() and _dest_has_output(dest):
         alt = dest.parent / f"{dest.name} ({label})"
@@ -152,6 +145,7 @@ def finish_rip(label: str, dest: Path, cdev: str, ok: bool, mins: int, kind: str
     gb = human_gb(kb)
     rel = str(dest.relative_to(cfg.LIBRARY))
 
+    (cfg.STATE / f"nagged-{label}").unlink(missing_ok=True)
     if ok:
         (cfg.STATE / f"fails-{label}").unlink(missing_ok=True)
         (cfg.DONEDIR / label).touch()
@@ -171,6 +165,9 @@ def finish_rip(label: str, dest: Path, cdev: str, ok: bool, mins: int, kind: str
         log(cfg.RIPLOG, f"FAIL  {label} -> {rel}  {mins}m  (attempt {fails}/{cfg.MAX_RETRIES})")
         if fails >= cfg.MAX_RETRIES:
             (cfg.STATE / f"gaveup-{label}").touch()
+            # Deleting gaveup-<label> is how a human retries, so that retry
+            # starts from a fresh count.
+            fails_f.unlink(missing_ok=True)
             log(cfg.RIPLOG, f"GIVEUP {label} after {fails} attempts - ejecting, moving on")
             eject_disc(cdev, label)
             notify(f"backcrack - {label} GAVE UP",
@@ -182,10 +179,7 @@ def finish_rip(label: str, dest: Path, cdev: str, ok: bool, mins: int, kind: str
 
 
 def rip_video_disc(dev: str, label: str) -> None:
-    # dev is already the cooked path (pending_discs() reads it straight from
-    # `mount`/`diskutil list`, which never print a raw device name) - passing
-    # it through disc.cooked() anyway used to double the "/dev/" prefix into
-    # a device path that doesn't exist, silently breaking every eject.
+    # dev is the cooked /dev/diskN path, as pending_discs() yields it.
     cdev, rdev = dev, disc.raw(dev)
     if already_handled(label, cdev):
         return
@@ -209,10 +203,8 @@ def rip_video_disc(dev: str, label: str) -> None:
     dest = _make_dest(dest, label)
     mark_unsorted_kind(dest, "video")
 
-    # MakeMKV's own stdout/stderr used to just be discarded (capture_output=True,
-    # never read) - the one place that would show a read error, a retried
-    # sector, or a title it silently gave up on, on a scratched or otherwise
-    # marginal disc. Logged instead, matching HandBrake's own per-title log.
+    # MakeMKV's output is the only record of a read error, a retried sector or
+    # a title it gave up on, so keep it, as HandBrake's per-title log is kept.
     mkv_log = cfg.LOGDIR / f"{label}.mkv.log"
     t0 = time.monotonic()
     if cfg.RIP_MODE == "video_ts":
@@ -230,11 +222,9 @@ def rip_video_disc(dev: str, label: str) -> None:
                 stdout=logf, stderr=subprocess.STDOUT, timeout=None,
             ).returncode
         ok = rc == 0 and any(nsrc.glob("*.mkv"))
-        # "N titles saved, M failed" is MakeMKV's own tally, printed even when
-        # it still exits 0 and even when some titles genuinely did save (the
-        # Season 7 Disc 2 case: rc=0, 2 titles saved, exit looked clean) - a
-        # partial rip must never be trusted as a complete one, or it goes on
-        # to overwrite whatever finished rip is already sitting at this dest.
+        # MakeMKV can exit 0 after saving only some titles. Its own "N titles
+        # saved, M failed" tally is what shows a partial rip, which must not
+        # count as a finished one.
         m = re.search(r"(\d+) titles saved, (\d+) failed", mkv_log.read_text(errors="ignore"))
         if m and int(m.group(2)) > 0:
             ok = False
@@ -247,11 +237,11 @@ def rip_video_disc(dev: str, label: str) -> None:
 
 
 def rip_audio_disc(dev: str, label: str) -> None:
-    # dev is already the cooked path (pending_discs() reads it straight from
-    # `mount`/`diskutil list`, which never print a raw device name) - passing
-    # it through disc.cooked() anyway used to double the "/dev/" prefix into
-    # a device path that doesn't exist, silently breaking every eject.
+    # dev is the cooked /dev/diskN path, as pending_discs() yields it. label
+    # is only the device name there, so name the CD itself now this thread
+    # holds the drive.
     cdev, rdev = dev, disc.raw(dev)
+    label = disc.audio_label(rdev) or label
     if already_handled(label, cdev):
         return
 

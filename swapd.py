@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""swapd.py - waits until every drive is genuinely idle, then swaps
-ripd.py.new into place and restarts the ripper. Exits after.
-Named so that `pkill -f ripd.py` cannot match it.
+"""swapd.py - upgrades a running ripper without interrupting a rip. Stage
+the new version as ripd.py.new beside ripd.py, run swapd, and it waits until
+no drive is ripping, swaps ripd.py.new into place and restarts ripd. Exits
+after.
 """
 import subprocess
 import sys
@@ -10,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backcrack import config as cfg
-from backcrack.lib import log, notify
+from backcrack.lib import find_daemons, log, notify, stop_daemons
 
 HERE = Path(__file__).resolve().parent
 SWAPLOG = cfg.STATE / "swap.log"
@@ -45,7 +46,7 @@ def main() -> None:
             return
 
     log(SWAPLOG, f"drives idle after {waited}s - swapping")
-    subprocess.run(["pkill", "-f", "ripd.py"], capture_output=True)
+    stop_daemons("ripd")
     time.sleep(2)
     try:
         new_ripd.replace(HERE / "ripd.py")
@@ -60,8 +61,7 @@ def main() -> None:
     subprocess.Popen([sys.executable, str(HERE / "ripd.py")],
                       stdout=open(cfg.STATE / "ripd.out", "ab"), stderr=subprocess.STDOUT)
     time.sleep(4)
-    running = subprocess.run(["pgrep", "-f", "ripd.py"], capture_output=True).returncode == 0
-    if running:
+    if find_daemons("ripd"):
         log(SWAPLOG, "SWAPPED and restarted ripd.py")
         notify("backcrack - ripd.py upgraded", "New version is now running.", "low", "white_check_mark")
     else:

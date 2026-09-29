@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """diskspeed.py - measure sustained read throughput of every loaded optical
-drive. Works for CD, DVD, or Blu-ray - it's a raw block read, format doesn't
-matter. Reports live progress and detects a stalled read instead of hanging
-silently.
+drive. It's a raw block read, so any disc works. Speeds are shown in MB/s and
+in DVD "x" units (1x = 1,385,000 bytes/s), so a CD or Blu-ray reads as a
+multiple of DVD 1x, not of its own format's 1x. Reports live progress and
+detects a stalled read instead of hanging silently.
 
-    ./diskspeed.py
+    diskspeed
 
 Put the SAME disc in each drive in turn so the comparison is fair.
-Results accumulate in ~/diskspeed.txt
+Results accumulate in RESULTS (default ~/diskspeed.txt). READ_MB, SKIP_MB,
+STALL_S and DISC_BYTES (the size behind the minutes-per-disc estimate,
+default a 7 GB DVD) are settings like any other.
 """
 import os
 import re
@@ -19,39 +22,23 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-READ_MB = int(os.environ.get("READ_MB", 600))
-SKIP_MB = int(os.environ.get("SKIP_MB", 1000))
-STALL_S = int(os.environ.get("STALL_S", 60))
-DISC_BYTES = int(os.environ.get("DISC_BYTES", 7_000_000_000))
-RESULTS = Path(os.environ.get("RESULTS", str(Path.home() / "diskspeed.txt")))
-MKV = os.environ.get("MKV", "/Applications/MakeMKV.app/Contents/MacOS/makemkvcon")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from backcrack import config as cfg
+from backcrack.disc import DVD_1X_BPS, cooked, mkv_drives
+
+READ_MB, SKIP_MB, STALL_S, DISC_BYTES, RESULTS = cfg.READ_MB, cfg.SKIP_MB, cfg.STALL_S, cfg.DISC_BYTES, cfg.RESULTS
 
 
 def hr() -> None:
     print("-" * 70)
 
 
-def cooked(dev: str) -> str:
-    return "/dev/" + dev.removeprefix("/dev/r")
-
-
-def drives():
-    out = subprocess.run([MKV, "-r", "--cache=1", "info", "disc:9999"],
-                          capture_output=True, text=True, timeout=30).stdout
-    rows = []
-    for line in out.splitlines():
-        m = re.match(r'^DRV:(\d+),2,\d+,\d+,"([^"]*)","([^"]*)","([^"]*)"', line)
-        if m:
-            rows.append(m.groups())
-    return rows
-
-
 def main() -> None:
-    if not Path(MKV).exists():
-        print(f"makemkvcon not found at {MKV}", file=sys.stderr)
+    if not Path(cfg.MKVCON).exists():
+        print(f"makemkvcon not found at {cfg.MKVCON}", file=sys.stderr)
         sys.exit(1)
 
-    disc_drives = drives()
+    disc_drives = mkv_drives(timeout=30)
     if not disc_drives:
         print("No discs loaded. Insert a disc in each drive and re-run.", file=sys.stderr)
         sys.exit(1)
@@ -80,7 +67,7 @@ def main() -> None:
         tmp.close()
         with open(tmp.name, "wb") as errf:
             proc = subprocess.Popen(
-                ["dd", f"if={raw}", "of=/dev/null", "bs=1m", f"count={READ_MB}", f"skip={SKIP_MB}"],
+                [*sudo, "dd", f"if={raw}", "of=/dev/null", "bs=1m", f"count={READ_MB}", f"skip={SKIP_MB}"],
                 stderr=errf,
             )
 
@@ -105,12 +92,12 @@ def main() -> None:
                 m = re.search(r"in ([\d.]+) secs", lines[-1])
                 t = float(m.group(1)) if m else 0
                 if t > 0:
-                    print(f"   {b/1e6:6.0f} MB   {b/1e6/t:6.2f} MB/s   {b/1385000/t:4.1f}x")
+                    print(f"   {b/1e6:6.0f} MB   {b/1e6/t:6.2f} MB/s   {b/DVD_1X_BPS/t:4.1f}x")
             else:
                 quiet += 6
                 if quiet >= STALL_S:
                     print(f"   STALLED at {last_bytes // 1_000_000}MB - no progress for {quiet}s, aborting")
-                    proc.kill()
+                    proc.terminate()   # SIGTERM, which sudo passes on to dd
                     stalled = 1
                     break
                 print(f"   ...no progress for {quiet}s")
@@ -129,7 +116,7 @@ def main() -> None:
             print("  RESULT: no clean measurement (likely bad/protected sectors - try SKIP_MB=4000)")
             continue
 
-        out_line = (f"{short:<42} {label or '?':<20} {bps/1e6:6.2f} MB/s  {bps/1385000:4.1f}x  "
+        out_line = (f"{short:<42} {label or '?':<20} {bps/1e6:6.2f} MB/s  {bps/DVD_1X_BPS:4.1f}x  "
                     f"~{(DISC_BYTES/bps)/60:.0f} min/disc")
         print(f"  RESULT: {out_line}")
         with open(RESULTS, "a") as f:

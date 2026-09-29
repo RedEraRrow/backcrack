@@ -1,7 +1,6 @@
 """encode.py - turn a ripped disc's source/ into encoded/ (and extras/ for
 video). Shared by encd.py.
 """
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -9,37 +8,57 @@ from . import config as cfg
 from .lib import log, notify, classify_class, hb_titles, file_duration
 
 
-def encode_video_one(src: str, title, out: Path, quality: str) -> int:
+PART = ".part"   # an encode in progress is written as <stem>.part<suffix>
+
+
+def _encode_to(out: Path, cmd_for, log_path: Path) -> int:
+    """Runs cmd_for(tmp) to write `out` under a temporary name, renaming it to
+    `out` only once the command succeeds, so an interrupted encode never
+    leaves a file that looks finished."""
     out.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [cfg.HBCLI, "-i", src]
-    if title is not None:
-        cmd += ["-t", str(title)]
-    cmd += [
-        "-o", str(out),
-        "--format", "av_mkv",
-        "--encoder", cfg.VIDEO_ENCODER, "--encoder-preset", cfg.ENCODER_PRESET, "--quality", quality,
-        "-x", f"threads={cfg.ENCODE_THREADS}",
-        *cfg.DEINTERLACE_ARGS,
-        "--all-audio", "--aencoder", "copy", "--audio-fallback", "ca_aac",
-        "--all-subtitles", "--markers",
-    ]
-    log_path = cfg.LOGDIR / f"{out.name}.hb.log"
+    tmp = out.with_name(out.stem + PART + out.suffix)
     with open(log_path, "ab") as logf:
-        return subprocess.run(cmd, stdout=logf, stderr=subprocess.STDOUT, timeout=None).returncode
+        rc = subprocess.run(cmd_for(tmp), stdout=logf, stderr=subprocess.STDOUT, timeout=None).returncode
+    if rc == 0 and tmp.exists():
+        tmp.replace(out)
+    else:
+        tmp.unlink(missing_ok=True)
+        log(cfg.ENCLOG, f"FAIL  {out.name} (rc={rc}) - see {log_path}")
+    return rc
+
+
+def encode_video_one(src: str, title, out: Path, quality: str) -> int:
+    def cmd_for(tmp: Path) -> list:
+        return [
+            cfg.HBCLI, "-i", src,
+            *(["-t", str(title)] if title is not None else []),
+            "-o", str(tmp),
+            "--format", "av_mkv",
+            "--encoder", cfg.VIDEO_ENCODER, "--encoder-preset", cfg.ENCODER_PRESET, "--quality", quality,
+            "-x", f"threads={cfg.ENCODE_THREADS}",
+            *cfg.DEINTERLACE_ARGS,
+            "--all-audio", "--aencoder", "copy", "--audio-fallback", "ca_aac",
+            "--all-subtitles", "--markers",
+        ]
+    return _encode_to(out, cmd_for, cfg.LOGDIR / f"{out.name}.hb.log")
+
+
+def audio_ext() -> str:
+    """The encoded tracks' extension: AUDIO_FORMAT, or "wav" when no encoder
+    for it is installed and the ripped WAV is copied as it is."""
+    if (cfg.FLAC and cfg.AUDIO_FORMAT == "flac") or cfg.FFMPEG:
+        return cfg.AUDIO_FORMAT
+    return "wav"
 
 
 def encode_audio_one(src: Path, out: Path) -> None:
-    out.parent.mkdir(parents=True, exist_ok=True)
-    log_path = cfg.LOGDIR / f"{out.name}.enc.log"
-    if cfg.FLAC and cfg.AUDIO_FORMAT == "flac":
-        cmd = [cfg.FLAC, "-s", "-f", "-o", str(out), str(src)]
-    elif shutil.which("ffmpeg"):
-        cmd = ["ffmpeg", "-y", "-i", str(src), "-c:a", cfg.AUDIO_FORMAT, str(out)]
-    else:
-        shutil.copy(src, out)
-        return
-    with open(log_path, "ab") as logf:
-        subprocess.run(cmd, stdout=logf, stderr=subprocess.STDOUT, timeout=None)
+    def cmd_for(tmp: Path) -> list:
+        if cfg.FLAC and cfg.AUDIO_FORMAT == "flac":
+            return [cfg.FLAC, "-s", "-f", "-o", str(tmp), str(src)]
+        if cfg.FFMPEG:
+            return [cfg.FFMPEG, "-y", "-i", str(src), "-c:a", cfg.AUDIO_FORMAT, str(tmp)]
+        return ["cp", str(src), str(tmp)]
+    _encode_to(out, cmd_for, cfg.LOGDIR / f"{out.name}.enc.log")
 
 
 def _run_batched(jobs, worker) -> None:
@@ -138,8 +157,10 @@ def process_audio_job(label: str, dest: Path) -> None:
 
     n_done = n_skip = 0
     jobs = []
+    ext = audio_ext()
     for f in sorted(src.glob("*.wav")):
-        out = dest / "encoded" / f"{f.stem}.{cfg.AUDIO_FORMAT}"
+        # cdparanoia -B names tracks track01.cdda.wav
+        out = dest / "encoded" / f"{f.stem.removesuffix('.cdda')}.{ext}"
         if out.exists() and out.stat().st_size > 0:
             n_skip += 1
             continue

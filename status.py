@@ -6,7 +6,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backcrack import config as cfg
-from backcrack.lib import human_gb, dir_size_kb
+from backbone.ui import dir_size_kb, human_gb
+from backcrack.lib import find_daemons
 
 
 def main() -> None:
@@ -49,11 +50,11 @@ def main() -> None:
 
     print()
     print("-- running processes --------------------------------")
-    out = subprocess.run(
-        ["pgrep", "-fl", "ripd.py|encd.py|makemkvcon|HandBrakeCLI|cdparanoia"],
-        capture_output=True, text=True,
-    ).stdout
-    print("\n".join(f"  {l}" for l in out.splitlines()) or "  none")
+    procs = [f"{pid} {command}" for pid, command in find_daemons("ripd", "encd", "sortd", "swapd")]
+    procs += subprocess.run(
+        ["pgrep", "-fl", "makemkvcon|HandBrakeCLI|cdparanoia"], capture_output=True, text=True,
+    ).stdout.splitlines()
+    print("\n".join(f"  {l}" for l in procs) or "  none")
 
     print()
     print("-- last 8 rip events -------------------------------")

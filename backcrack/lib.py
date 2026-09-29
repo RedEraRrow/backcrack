@@ -1,9 +1,12 @@
 """lib.py - format-agnostic helpers shared by every daemon and tool."""
 import json
+import os
+import signal
 import subprocess
 import threading
 import urllib.request
 from datetime import datetime
+from itertools import dropwhile
 from pathlib import Path
 
 from . import config as cfg
@@ -33,6 +36,41 @@ def notify(title: str, message: str, priority: str = "default", tags: str = "opt
             pass
 
     threading.Thread(target=_send, daemon=True).start()
+
+
+def find_daemons(*names: str) -> list:
+    """(pid, command) for every running backcrack daemon in `names` (e.g.
+    "ripd"), however it was started: `ripd`, `ripd.py`, `python3 ripd.py`
+    or `backcrack ripd`. The calling process is never included.
+    """
+    try:
+        out = subprocess.run(["ps", "-Awwo", "pid=,command="], capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    found = []
+    for line in out.splitlines():
+        pid, _, command = line.strip().partition(" ")
+        if not pid.isdigit() or int(pid) == os.getpid():
+            continue
+        args = list(dropwhile(lambda a: a.startswith("-") or Path(a).name.startswith("python"), command.split()))
+        if not args:
+            continue
+        prog = Path(args[0]).name.removesuffix(".py")
+        if prog in names or (prog == "backcrack" and len(args) > 1 and args[1] in names):
+            found.append((int(pid), command))
+    return found
+
+
+def stop_daemons(*names: str) -> int:
+    """SIGTERMs every running daemon in `names`; returns how many it stopped."""
+    stopped = 0
+    for pid, _ in find_daemons(*names):
+        try:
+            os.kill(pid, signal.SIGTERM)
+            stopped += 1
+        except OSError:
+            pass
+    return stopped
 
 
 def human_gb(kb: float) -> str:

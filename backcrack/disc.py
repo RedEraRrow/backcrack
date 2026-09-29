@@ -2,6 +2,7 @@
 apart. All macOS-specific (diskutil, drutil, mount) - the disc hardware layer
 is the one part of this pipeline that doesn't travel to another OS for free.
 """
+import hashlib
 import re
 import subprocess
 import time
@@ -10,8 +11,16 @@ from pathlib import Path
 from . import config as cfg
 
 
+# Optical drive speeds are quoted in multiples of DVD 1x.
+DVD_1X_BPS = 1_385_000
+
+
 def raw(dev: str) -> str:
     return "/dev/r" + dev.removeprefix("/dev/")
+
+
+def cooked(dev: str) -> str:
+    return "/dev/" + dev.removeprefix("/dev/").removeprefix("r")
 
 
 def optical_mounts():
@@ -48,14 +57,62 @@ def audio_discs():
 
 def pending_discs():
     """Yields (device, kind, label) for every disc worth ripping. kind is
-    "video" or "audio". label is the volume name for video; audio CDs
-    rarely carry a useful one, so label is the device's disk identifier
-    there - auto_audio_tokens (pattern.py) is what actually identifies it.
+    "video" or "audio". label is the volume name for video. For audio it is
+    only the device name: reading the CD's id here, on every poll, would
+    disturb a rip already running in that drive, so rip_audio_disc names
+    the CD with audio_label() once it holds the drive's lock.
     """
     for dev, mnt in optical_mounts():
         yield dev, "video", Path(mnt).name
     for dev in audio_discs():
         yield dev, "audio", Path(dev).name
+
+
+def cd_discid(rdev: str) -> list:
+    """cd-discid's fields for the CD in `rdev` (freedb id, track count,
+    offsets..., seconds), or [] if it isn't installed or can't read it."""
+    if not cfg.CD_DISCID:
+        return []
+    try:
+        return subprocess.run([cfg.CD_DISCID, rdev], capture_output=True, text=True, timeout=15).stdout.split()
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+
+
+def audio_label(rdev: str):
+    """A name for the CD in `rdev` that stays the same whichever drive it is
+    in: "AudioCD-<n>tracks-<id>". The id is cd-discid's, or a hash of
+    cdparanoia's track table when cd-discid isn't installed. None if
+    neither can read the disc.
+    """
+    fields = cd_discid(rdev)
+    if len(fields) >= 2 and fields[1].isdigit():
+        return f"AudioCD-{fields[1]}tracks-{fields[0]}"
+    if not cfg.CDPARANOIA:
+        return None
+    try:
+        toc = subprocess.run([cfg.CDPARANOIA, "-Q", "-d", rdev], capture_output=True, text=True, timeout=30).stderr
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    tracks = [line.split() for line in toc.splitlines() if re.match(r"^\s*\d+\.\s+\d+", line)]
+    if not tracks:
+        return None
+    digest = hashlib.sha1(" ".join(t[1] for t in tracks).encode()).hexdigest()[:8]
+    return f"AudioCD-{len(tracks)}tracks-{digest}"
+
+
+_DRV_RE = re.compile(r'^DRV:(\d+),2,\d+,\d+,"([^"]*)","([^"]*)","([^"]*)"')
+
+
+def mkv_drives(timeout: int = 60) -> list:
+    """(index, drive name, disc label, raw device) for every drive MakeMKV
+    sees with a disc loaded."""
+    try:
+        out = subprocess.run([cfg.MKVCON, "-r", "--cache=1", "info", "disc:9999"],
+                             capture_output=True, text=True, timeout=timeout).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    return [m.groups() for m in map(_DRV_RE.match, out.splitlines()) if m]
 
 
 # MakeMKV drive indices move between insertions, so never cache one.
@@ -75,21 +132,10 @@ def mkv_index_for(dev: str):
                 break
             time.sleep(2)
     try:
-        out = subprocess.run(
-            [cfg.MKVCON, "-r", "--cache=1", "info", "disc:9999"],
-            capture_output=True, text=True, timeout=60,
-        ).stdout
-    except (OSError, subprocess.TimeoutExpired):
-        out = ""
+        drives = mkv_drives()
     finally:
         try:
             lockdir.rmdir()
         except OSError:
             pass
-    for line in out.splitlines():
-        if not line.startswith("DRV:"):
-            continue
-        parts = line[4:].split(",")
-        if len(parts) >= 6 and parts[1] == "2" and parts[-1].strip('"') == want:
-            return parts[0]
-    return None
+    return next((idx for idx, _, _, device in drives if device == want), None)

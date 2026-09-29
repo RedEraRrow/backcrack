@@ -18,30 +18,32 @@ import threading
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backbone.nav import NAV_STACK
 from backbone.prompt_core import _hint, run_dashboard
 from backbone.ui import (
     Colors as C, bar, clip_ansi, content_width, dir_size_kb, get_terminal_width,
     header_box, human_gb, rate_of_change, sparkline, spinner, truncate_text,
 )
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backcrack import config as cfg
+from backcrack.disc import DVD_1X_BPS
+from backcrack.encode import PART
+from backcrack.lib import stop_daemons
 
 NAV_STACK[:] = ["backcrack", "watch"]
 
-TOTAL_DISCS = int(os.environ.get("TOTAL_DISCS", 0))  # 0 = unknown - hides percent/ETA
-INTERVAL = float(os.environ.get("INTERVAL", 1))
-WINDOW = int(os.environ.get("WINDOW", 20))
-ACTIVE_S = int(os.environ.get("ACTIVE_S", 90))
-FALLBACK_KB = int(os.environ.get("FALLBACK_KB", 7340032))
+TOTAL_DISCS = cfg.TOTAL_DISCS
+INTERVAL = cfg.WATCH_INTERVAL
+WINDOW = cfg.WINDOW
+ACTIVE_S = cfg.ACTIVE_S
+FALLBACK_KB = cfg.FALLBACK_KB
 
-# Restrained palette: PRIMARY and ACCENT are the only two real colours -
-# everything else is weight/brightness (bold/dim/white), not hue. ACCENT is
-# reserved for failure; PRIMARY marks whatever's active/successful/counted.
+# Restrained palette: PRIMARY marks whatever is active, finished or counted,
+# FAIL is red whatever the accent colour is, and everything else is weight
+# and brightness (bold, dim, white) rather than hue.
 R, B, DIM = C.RESET, C.BOLD, C.DIM
 FRAME, TXT, MUTE = C.DIM, C.WHITE, C.DIM
-PRIMARY, ACCENT = C.PRIMARY, C.ACCENT
+PRIMARY, FAIL = C.PRIMARY, C.RED
 
 
 # ---- per-dest live state (in memory) ---------------------------------------
@@ -143,7 +145,7 @@ def sample(sd: str, now: float, kb: int) -> tuple:
         return "measuring", ""
     mb_s = kb_per_s / 1024
     spark = sparkline(_rate_history.setdefault(sd, []), mb_s)
-    return f"{mb_s:.2f} MB/s {(mb_s * 1e6) / 1385000:.1f}x", spark
+    return f"{mb_s:.2f} MB/s {(mb_s * 1e6) / DVD_1X_BPS:.1f}x", spark
 
 
 def hb_pct(log_path: Path) -> int:
@@ -212,7 +214,9 @@ def render() -> list:
     lines.append(f"  {PRIMARY}RIPPING{R}")
     ps_out = ps_snapshot()   # one process listing, reused below and by ENCODING
     rows = []
-    for sd in sorted(cfg.LIBRARY.glob("*/*/source")) if cfg.LIBRARY.exists() else []:
+    # Any depth, since a pattern can nest a disc's folder as deep as it likes.
+    sources = sorted(p for p in cfg.LIBRARY.rglob("source") if p.is_dir() and ".ripstate" not in p.parts)
+    for sd in sources:
         dest = sd.parent
         try:
             rel = str(dest.relative_to(cfg.LIBRARY))
@@ -275,9 +279,9 @@ def render() -> list:
     )
     enc_rows = []
     for m in re.finditer(r"-o (.+?\.mkv) --format", ps_out):
-        out_path = Path(m.group(1))
-        pct = hb_pct(cfg.LOGDIR / f"{out_path.name}.hb.log")
-        enc_rows.append((out_path.name, pct))
+        name = Path(m.group(1)).name.replace(PART + ".mkv", ".mkv")
+        pct = hb_pct(cfg.LOGDIR / f"{name}.hb.log")
+        enc_rows.append((name, pct))
     if not enc_rows:
         lines.append(f"   {DIM}idle{R}")
     else:
@@ -296,7 +300,7 @@ def render() -> list:
             if "OK    " in ln:
                 color = PRIMARY
             elif "FAIL  " in ln:
-                color = ACCENT
+                color = FAIL
             elif "START " in ln:
                 color = TXT
             elif "SKIP  " in ln:
@@ -335,7 +339,9 @@ def _apply_live(name: str, kind: str, new: str) -> None:
     are separate processes that only read config.py at startup - same as
     every other config change, they need restarting to pick this up too."""
     global _CLASS_FOLDERS
-    if kind == "path":
+    if name == "LIBRARY":
+        cfg.use_library(Path(new).expanduser())
+    elif kind == "path":
         setattr(cfg, name, Path(new))
     elif name == "DEINTERLACE_ARGS":
         setattr(cfg, name, new.split())
@@ -412,10 +418,9 @@ def _on_key(key: str) -> None:
 
 
 def _prompt_stop_daemons() -> None:
-    from backbone.prompt import confirm  # deferred: ~4000-line module, only needed on quit
-    if confirm("Stop the ripd/encd daemons too?", default=False):
-        subprocess.run(["pkill", "-f", "ripd.py|encd.py"], capture_output=True)
-        print("daemons stopped")
+    from backbone.prompt import confirm  # deferred: large module, only needed on quit
+    if confirm("Stop the ripd, encd and sortd daemons too?", default=False):
+        print(f"{stop_daemons('ripd', 'encd', 'sortd')} daemons stopped")
     else:
         print("watcher closed — daemons still running")
 

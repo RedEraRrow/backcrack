@@ -20,11 +20,13 @@ place rather than guessing.
     ./namer.py "Season 4"   just one season
 """
 import re
+import shutil
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backcrack import config as cfg
+from backcrack.encode import PART
 
 MAP_FILE = cfg.EPISODES_MAP
 
@@ -59,39 +61,52 @@ def safe(title: str) -> str:
 FEATURETTES = "featurettes"   # a Jellyfin/Kodi-recognized extras type - "extras" itself isn't one
 
 
-def _move_with_thumb(src: Path, dest: Path) -> None:
-    """Moves `src` to `dest`, carrying its "<stem>-thumb.jpg" sidecar (if
-    any) along, renamed to match."""
+def _move_with_thumb(src: Path, dest: Path) -> bool:
+    """Moves `src` to `dest`, bringing its matching "<stem>-thumb.jpg" (if
+    any) along, renamed to match. False if `dest` already exists."""
     if dest.exists():
         print(f"  !! collision, not moving: {src} -> {dest}")
-        return
+        return False
     src.rename(dest)
     thumb = src.with_name(src.stem + "-thumb.jpg")
     if thumb.exists():
         thumb.rename(dest.with_name(dest.stem + "-thumb.jpg"))
+    return True
+
+
+def _natural(p: Path) -> list:
+    """Sort key that puts "Disc 2" before "Disc 10"."""
+    return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", p.name)]
 
 
 def rename_season(season_dir: Path, titles: list) -> None:
-    discs = sorted((d for d in season_dir.iterdir() if d.is_dir() and d.name != FEATURETTES),
-                   key=lambda d: d.name)
-    files = []
+    discs = sorted((d for d in season_dir.iterdir() if d.is_dir() and d.name != FEATURETTES), key=_natural)
+    files, by_disc = [], {}
     for d in discs:
         enc = d / "encoded"
-        if enc.is_dir():
-            files.extend(sorted(enc.glob("*.mkv")))
+        if not enc.is_dir():
+            continue
+        if any(enc.glob(f"*{PART}.mkv")):
+            print(f"  SKIP: {enc.relative_to(cfg.LIBRARY)} still has an encode in progress, not touching it")
+            return
+        by_disc[d] = sorted(enc.glob("*.mkv"), key=_natural)
+        files.extend(by_disc[d])
+        empty = [f for f in by_disc[d] if f.stat().st_size == 0]
+        if empty:
+            print(f"  SKIP: {empty[0].relative_to(cfg.LIBRARY)} is empty, not touching it")
+            return
 
     if len(files) != len(titles):
         print(f"  SKIP: {len(files)} encoded files but {len(titles)} titles - counts don't match, not touching it")
         return
 
     season_num = int(re.search(r"\d+", season_dir.name).group())
+    moved = set()
     for i, (f, title) in enumerate(zip(files, titles), start=1):
         new_name = f"S{season_num:02d}E{i:02d} {safe(title)}.mkv"
-        dest = season_dir / new_name
-        if f.parent == season_dir and f.name == new_name:
-            continue
         print(f"  {f.relative_to(cfg.LIBRARY)} -> {new_name}")
-        _move_with_thumb(f, dest)
+        if _move_with_thumb(f, season_dir / new_name):
+            moved.add(f)
 
     # Consolidate every disc's extras/ into one season-level featurettes/ -
     # Jellyfin looks for a recognized extras-type folder directly under the
@@ -112,13 +127,12 @@ def rename_season(season_dir: Path, titles: list) -> None:
             if dest.exists():
                 dest = featurettes / f"{d.name.replace(' ', '')}_{f.name}"
             _move_with_thumb(f, dest)
-        extras.rmdir()
+        if not any(extras.iterdir()):
+            extras.rmdir()
 
-    # Each disc folder should now be empty (encoded/ consumed above,
-    # extras/ consumed above) once source/ - the raw, already-encoded rip -
-    # is dropped too. Kept until now in case an interrupted encode needed a
-    # re-run; a season that just passed the count check above is done.
-    import shutil
+    # source/ is the lossless rip. It is deleted only for a disc whose
+    # encoded episodes were all moved into the season above (each one
+    # non-empty, checked before anything moved); any other disc keeps it.
     for d in discs:
         ds = d / ".DS_Store"
         if ds.exists():
@@ -128,7 +142,11 @@ def rename_season(season_dir: Path, titles: list) -> None:
             enc.rmdir()
         src = d / "source"
         if src.is_dir():
-            shutil.rmtree(src)
+            if by_disc.get(d) and all(f in moved for f in by_disc[d]):
+                print(f"  deleting {src.relative_to(cfg.LIBRARY)} (the lossless rip; its episodes are encoded)")
+                shutil.rmtree(src)
+            else:
+                print(f"  keeping {src.relative_to(cfg.LIBRARY)}: this disc's episodes weren't all encoded and moved")
         if not any(d.iterdir()):
             d.rmdir()
         else:

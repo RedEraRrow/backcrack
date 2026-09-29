@@ -34,6 +34,7 @@ import swapd
 import titles
 import watch
 from backcrack import config as cfg
+from backcrack.lib import find_daemons
 
 HERE = Path(__file__).resolve().parent
 
@@ -50,30 +51,18 @@ COMMANDS = {
 }
 
 
-def _running(name: str) -> bool:
-    """True if `name`.py (this spawns it that way) OR its `backcrack <name>`
-    console-script form (a user can also start it that way directly) is
-    already running - matching only "ripd.py" used to miss a "backcrack
-    ripd" instance entirely, so launch_all() would spawn a second one that
-    raced the first for the same drive.
-    """
-    return subprocess.run(["pgrep", "-f", f"{name}.py|backcrack {name}"], capture_output=True).returncode == 0
-
-
 def _spawn(script: str) -> None:
     out = cfg.STATE / f"{script.removesuffix('.py')}.out"
-    subprocess.Popen([sys.executable, str(HERE / script)],
+    subprocess.Popen([sys.executable, "-u", str(HERE / script)],
                       stdout=open(out, "ab"), stderr=subprocess.STDOUT)
 
 
 def launch_all() -> None:
     started = []
-    if cfg.LAUNCH_RIPD and not _running("ripd"):
-        _spawn("ripd.py")
-        started.append("ripd")
-    if cfg.LAUNCH_ENCD and not _running("encd"):
-        _spawn("encd.py")
-        started.append("encd")
+    for name, wanted in (("ripd", cfg.LAUNCH_RIPD), ("encd", cfg.LAUNCH_ENCD), ("sortd", cfg.LAUNCH_SORTD)):
+        if wanted and not find_daemons(name):
+            _spawn(f"{name}.py")
+            started.append(name)
 
     if cfg.LAUNCH_WATCH:
         watch.main()
