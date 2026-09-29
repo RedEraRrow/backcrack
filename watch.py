@@ -220,7 +220,7 @@ def render() -> list:
         rows.append((label, dv or "-", pct, human_gb(kb), human_gb(tot), rate_s, spark))
 
     if not rows:
-        lines.append(f"   {DIM}idle — insert a disc{R}")
+        lines.append(f"   {DIM}idle, insert a disc{R}")
     else:
         w2 = max(3, max(len(r[1]) for r in rows))
         w3 = max(3, max(len(r[3]) for r in rows))
@@ -386,7 +386,7 @@ def _prompt_stop_daemons() -> None:
     if confirm("Stop the ripd, encd and sortd daemons too?", default=False):
         print(f"{stop_daemons('ripd', 'encd', 'sortd')} daemons stopped")
     else:
-        print("watcher closed — daemons still running")
+        print("watcher closed, daemons still running")
 
 
 def main() -> None:
