@@ -1,0 +1,30 @@
+name: fresh install
+
+# The README's install steps on a macOS runner (which comes with Homebrew, so
+# it starts at `brew install pipx`): the published package from PyPI must
+# install and `backcrack doctor` run. The rippers themselves aren't installed:
+# doctor reports them, which is its job. Runs after each release, weekly, and
+# when the instructions change.
+on:
+  workflow_run:
+    workflows: [release]
+    types: [completed]
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [README.md, .github/workflows/fresh-install.yml]
+
+jobs:
+  macos:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: macos-latest
+    steps:
+      - run: brew install pipx
+      - name: pipx ensurepath, and a new shell
+        run: |
+          pipx ensurepath
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: pipx install backpack-backcrack
+      - run: backcrack doctor

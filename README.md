@@ -10,11 +10,20 @@ Python, stdlib only apart from `backbone`, the library the back* tools share
 
 ## Install
 
-macOS only (it drives the drives through diskutil and drutil):
+macOS only (it drives the drives through diskutil and drutil). Starting from
+nothing:
+
+    # Homebrew, if you don't have it yet (on Apple Silicon it prints two
+    # lines to run afterwards: run them)
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
     brew install pipx
+    pipx ensurepath             # then open a new terminal window
     pipx install backpack-backcrack
     backcrack doctor
+
+macOS's own `python3` is too old (3.9); pipx from Homebrew brings a current
+one. `pipx ensurepath` puts `backcrack` on your PATH for new terminal windows.
 
 `backcrack doctor` lists the rippers and encoders it drives, found or how to
 install each. For everything: `brew install --cask makemkv` and
