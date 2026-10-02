@@ -33,7 +33,7 @@ def hr() -> None:
 
 def main() -> None:
     if not Path(cfg.MKVCON).exists():
-        print(f"makemkvcon not found at {cfg.MKVCON}", file=sys.stderr)
+        print(f"makemkvcon not found at {cfg.MKVCON}. See `backcrack doctor`.", file=sys.stderr)
         sys.exit(1)
 
     disc_drives = mkv_drives(timeout=30)

@@ -10,25 +10,27 @@ Python, stdlib only apart from `backbone`, the library the back* tools share
 
 ## Install
 
-    pip3 install -e .
+macOS only (it drives the drives through diskutil and drutil):
 
-pip fetches backbone from GitHub. If you're changing backbone too, install
-your checkout of it editable first (`pip3 install -e ../backbone`) and pip
-leaves it in place.
+    brew install pipx
+    pipx install backpack-backcrack
+    backcrack doctor
 
-That puts `backcrack`, `ripd`, `encd`, `sortd`, `watch`, `status`, `swapd`,
-`titles`, `diskspeed` and `namer` on your PATH as plain commands: no `./`,
-no `.py`, no `python3` in front. It's a live link back to this source tree,
-so editing any file here takes effect immediately, no reinstall.
+`backcrack doctor` lists the rippers and encoders it drives, found or how to
+install each. For everything: `brew install --cask makemkv` and
+`brew install handbrake cdparanoia flac cd-discid`. Paths it can't find
+itself go in `settings.env` (`MKVCON`, `HBCLI`, …).
 
-`watch`, `status` and `titles` are common words. If any of those already
-means something else in your shell, rename that one entry in
-`pyproject.toml`'s `[project.scripts]` and re-run `pip3 install -e .`, or
-use the `backcrack <command>` form below, which always works.
+Every tool is a subcommand of the one command, `backcrack` (`backcrack
+watch`, `backcrack status`), so it never takes a common word like `watch`
+on your PATH.
 
-Without installing backcrack itself, every command still runs from the
-checkout as `python3 -m backcrack <command>` (`python3 -m backcrack watch`),
-as long as backbone is installed.
+To work on it from a checkout, install backbone's checkout and this one
+editable (backbone first), so edits take effect with no reinstall:
+
+    pip3 install -e ../backbone -e .
+
+Every command also runs from the checkout as `python3 -m backcrack <command>`.
 
 ## Before the first disc
 
@@ -54,19 +56,16 @@ view. Any of them already running is left alone. Their output goes to
 `LAUNCH_SORTD` and `LAUNCH_WATCH` (all on by default) turn each part off, to
 run it by hand in its own tab instead:
 
-    ripd
-    encd       # start it once and leave it; idle is normal
-    sortd
-
-Every subcommand also works as `backcrack <command>`, e.g.
-`backcrack ripd`, `backcrack namer "Season 4"`.
+    backcrack ripd
+    backcrack encd       # start it once and leave it; idle is normal
+    backcrack sortd
 
 Then load both drives. Every eject sends an ntfy push. Insert the next discs.
 
 Check progress any time:
 
-    status
-    watch      # live view
+    backcrack status
+    backcrack watch      # live view
 
 In `watch`, `q` quits (and offers to stop ripd, encd and sortd with it) and
 `s` opens the settings screen - see [Settings](#settings). Both keys, and those of every
@@ -128,7 +127,7 @@ a few seconds.
 
 Once the first disc of a kind has ripped, check what HandBrake saw:
 
-    titles "$LIBRARY/Season 1/Disc 1"
+    backcrack titles "$LIBRARY/Season 1/Disc 1"
 
 Every title in your target runtime should say `main`; menus, featurettes,
 and any "play all" duplicate should say `extra` or `skip`. Adjust
@@ -221,7 +220,8 @@ retried sector or a title MakeMKV gave up on shows.
 ## Upgrading ripd mid-run
 
 `swapd` swaps in a new `ripd.py` without interrupting a rip: save the new
-version as `backcrack/ripd.py.new` beside `backcrack/ripd.py` and run `swapd`. It waits until no
+version as `backcrack/ripd.py.new` beside `backcrack/ripd.py` (in a checkout) and run
+`backcrack swapd`. It waits until no
 drive is ripping (giving up after 4 hours), swaps the file in, restarts
 `ripd` and exits. `swap.log` in `.ripstate` records what it did.
 
@@ -284,8 +284,8 @@ files it within a few seconds.
 Once a season's discs are all ripped and encoded, `namer` lays them out the
 way Jellyfin and Kodi expect:
 
-    namer                 every season episodes.map covers
-    namer "Season 4"      just one
+    backcrack namer                 every season episodes.map covers
+    backcrack namer "Season 4"      just one
 
 Each disc's encoded titles are renamed to `SxxExx Title.mkv` using the titles
 in `episodes.map`, moved up into the season folder itself, and every disc's
@@ -327,10 +327,11 @@ names). With another pattern or other folder names, don't use it.
   `brew install cd-discid`. Without it, every CD goes to `UNSORTED/` until
   you add a `labels.map` line.
 
-A missing tool gets a warning at startup rather than a silent failure:
-`ripd` warns about makemkvcon, cdparanoia and cd-discid, and `encd` about
-HandBrakeCLI and flac/ffmpeg. The daemon still runs; that disc kind just
-won't rip or encode until the tool is installed.
+`backcrack doctor` checks all of them. A missing tool also gets a warning at
+startup rather than a silent failure: `ripd` warns about makemkvcon,
+cdparanoia and cd-discid, and `encd` about HandBrakeCLI and flac/ffmpeg. The
+daemon still runs; that disc kind just won't rip or encode until the tool is
+installed.
 
 ## Storage
 

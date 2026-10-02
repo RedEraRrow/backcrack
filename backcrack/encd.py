@@ -16,10 +16,10 @@ from backcrack.common import log
 def main() -> None:
     cfg.make_library_dirs()
     if not Path(cfg.HBCLI).exists():
-        print(f"WARNING: HandBrakeCLI not found at {cfg.HBCLI} - video jobs will fail.")
+        print(f"WARNING: HandBrakeCLI not found at {cfg.HBCLI} - video jobs will fail. See `backcrack doctor`.")
     if audio_ext() != cfg.AUDIO_FORMAT:
         need = "flac or ffmpeg" if cfg.AUDIO_FORMAT == "flac" else "ffmpeg"
-        print(f"WARNING: {need} not found - audio tracks will be copied as .wav. brew install {need.split()[0]}.")
+        print(f"WARNING: {need} not found - audio tracks will be copied as .wav. See `backcrack doctor`.")
 
     classes = ", ".join(f"{c.name} RF={c.quality}->{c.folder}/" for c in cfg.DURATION_CLASSES)
     print(f"Video: {cfg.VIDEO_ENCODER} preset={cfg.ENCODER_PRESET}  {classes}  ({cfg.ENCODE_JOBS} at a time)")

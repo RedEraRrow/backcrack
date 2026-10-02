@@ -3,27 +3,30 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "backcrack"
-version = "0.1.0"
+name = "backpack-backcrack"
+version = "0.2.0"
 description = "CD/DVD/Blu-ray rip pipeline - MakeMKV/HandBrake for video, cdparanoia for audio, dynamic %token% library patterning."
 requires-python = ">=3.10"
 readme = "README.md"
 license = { text = "MIT" }
-# Not on PyPI. If backbone is already installed (editable, from a checkout),
-# pip sees the requirement satisfied and leaves it.
-dependencies = ["backbone @ git+https://github.com/RedEraRrow/backbone.git"]
+dependencies = ["backpack-backbone>=0.2,<0.3"]
+classifiers = [
+    "Environment :: Console :: Curses",
+    "Topic :: Multimedia :: Sound/Audio :: CD Audio :: CD Ripping",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+]
 
+[project.urls]
+Homepage = "https://github.com/RedEraRrow/backcrack"
+Issues = "https://github.com/RedEraRrow/backcrack/issues"
+
+# One command: every tool is a subcommand (`backcrack watch`, `backcrack status`),
+# so plain words like watch and status aren't taken on the PATH.
 [project.scripts]
 backcrack = "backcrack.cli:main"
-ripd = "backcrack.ripd:main"
-encd = "backcrack.encd:main"
-sortd = "backcrack.sortd:main"
-watch = "backcrack.watch:main"
-status = "backcrack.status:main"
-swapd = "backcrack.swapd:main"
-titles = "backcrack.titles:main"
-diskspeed = "backcrack.diskspeed:main"
-namer = "backcrack.namer:main"
 
 [tool.setuptools.packages.find]
 include = ["backcrack*"]

@@ -122,7 +122,8 @@ NTFY_SERVER = _env("NTFY_SERVER", "https://ntfy.sh")
 LIBRARY = Path(_env("LIBRARY", str(Path.home() / "Media" / "rips"))).expanduser()
 
 # MKV is diskspeed's old name for it, still honoured.
-MKVCON = _env("MKVCON", _env("MKV", "/Applications/MakeMKV.app/Contents/MacOS/makemkvcon"))
+MKVCON = _env("MKVCON", _env("MKV", shutil.which("makemkvcon")
+                                   or "/Applications/MakeMKV.app/Contents/MacOS/makemkvcon"))
 HBCLI = _env("HBCLI", shutil.which("HandBrakeCLI") or "/opt/homebrew/bin/HandBrakeCLI")
 CDPARANOIA = _env("CDPARANOIA", shutil.which("cdparanoia") or "")
 CD_DISCID = _env("CD_DISCID", shutil.which("cd-discid") or "")

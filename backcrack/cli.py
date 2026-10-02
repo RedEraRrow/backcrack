@@ -12,6 +12,7 @@ LAUNCH_WATCH in settings.env (or as env vars) to run any of them by hand instead
     backcrack titles "/path/to/disc"
     backcrack diskspeed
     backcrack namer ["Season N"]
+    backcrack doctor      what it needs installed, found or how to get it
 
 Settings come from env vars, then settings.env, then backcrack/config.py's
 defaults, the same as running each tool directly:
@@ -32,6 +33,7 @@ from backcrack import titles
 from backcrack import watch
 from backcrack import config as cfg
 from backcrack.common import find_daemons, spawn_daemon
+from backcrack.deps import doctor
 
 COMMANDS = {
     "ripd": ripd.main,
@@ -43,6 +45,7 @@ COMMANDS = {
     "titles": titles.main,
     "diskspeed": diskspeed.main,
     "namer": namer.main,
+    "doctor": doctor,
 }
 
 

@@ -1,0 +1,32 @@
+name: tests
+
+on: [push, pull_request]
+
+# Tested against backbone's current main, checked out beside this repo, so a
+# change spanning both is tested together before either is released.
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: backcrack
+      - uses: actions/checkout@v4
+        with:
+          repository: RedEraRrow/backbone
+          path: backbone
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          allow-prereleases: true
+      - run: python -m pip install ./backbone ./backcrack
+      - name: Tests (settings and caches in a temporary folder)
+        working-directory: backcrack
+        env:
+          BACKCRACK_CONFIG_DIR: ${{ runner.temp }}/config
+        run: python -m unittest discover -s tests
