@@ -21,6 +21,7 @@ def idle() -> bool:
 
 
 def main() -> None:
+    cfg.make_library_dirs()
     new_ripd = HERE / "ripd.py.new"
     if not new_ripd.exists():
         print("nothing staged")

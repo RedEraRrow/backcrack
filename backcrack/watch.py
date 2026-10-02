@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 
 from backbone.nav import NAV_STACK
-from backbone import ui
+from backbone import keys, ui
 from backbone.prompt.core import hint, run_dashboard
 from backbone.ui import (
     Colors as C, bar, clip_ansi, content_width, dir_size_kb, get_terminal_width,
@@ -276,7 +276,8 @@ def render() -> list:
                 color = DIM
             lines.append(f"   {color}{truncate_text(ln[11:], max(4, cols - 3))}{R}")
     lines.append("")
-    lines.append(hint(("q", "quit"), ("s", "settings")))
+    lines.append(hint((keys.label("watch.quit", first=True), "quit"),
+                      (keys.label("watch.settings", first=True), "settings")))
 
     FRAMES += 1
     # Clip every line to the terminal's full width so nothing wraps,
@@ -324,15 +325,20 @@ def _apply_live(name: str, kind: str, new: str) -> None:
 
 
 def open_settings() -> None:
-    from backbone.prompt import select, text, confirm
+    from backbone.prompt import select, text, confirm, keys_editor
 
     while True:
         rows = [f"{label}  ({_current_value_str(name, kind)})" for name, kind, label in cfg.SETTINGS]
-        choice = select("backcrack settings", rows + ["+ add a labels.map entry"])
+        changed = sum(keys.changed(a.id) for a in keys.actions())
+        bindings = f"Key bindings…  ({changed} changed)" if changed else "Key bindings…  (default)"
+        choice = select("backcrack settings", rows + ["+ add a labels.map entry", bindings])
         if choice is None:
             return
         if choice == "+ add a labels.map entry":
             _add_label_entry()
+            continue
+        if choice == bindings:
+            keys_editor()
             continue
         name, kind, label = cfg.SETTINGS[rows.index(choice)]
         cur = _current_value_str(name, kind)
@@ -382,8 +388,14 @@ def _add_label_entry() -> None:
         f.write(f"{label}|{','.join(pairs)}\n")
 
 
+keys.define("watch", "Watch", [
+    ("quit", ("q", "Q"), "close the watcher"),
+    ("settings", ("s", "S"), "settings"),
+])
+
+
 def _on_key(key: str) -> None:
-    if key in ("s", "S"):
+    if keys.pressed(key, "watch.settings"):
         open_settings()
 
 
@@ -399,7 +411,7 @@ def main() -> None:
     if os.environ.get("ONESHOT"):
         print("\n".join(render()))
         return
-    run_dashboard(render, interval=INTERVAL, quit_key="q", on_quit=_prompt_stop_daemons, on_key=_on_key)
+    run_dashboard(render, interval=INTERVAL, quit_action="watch.quit", on_quit=_prompt_stop_daemons, on_key=_on_key)
 
 
 if __name__ == "__main__":

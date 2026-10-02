@@ -69,7 +69,8 @@ Check progress any time:
     watch      # live view
 
 In `watch`, `q` quits (and offers to stop ripd, encd and sortd with it) and
-`s` opens the settings screen - see [Settings](#settings).
+`s` opens the settings screen - see [Settings](#settings). Both keys, and those of every
+list, can be changed under Key bindings on that screen.
 
 ## What it detects
 

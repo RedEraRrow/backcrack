@@ -17,6 +17,7 @@ INTERVAL = cfg.SORT_INTERVAL
 
 
 def main() -> None:
+    cfg.make_library_dirs()
     dry_run = bool(os.environ.get("DRYRUN"))
     once = bool(os.environ.get("ONCE")) or dry_run
 

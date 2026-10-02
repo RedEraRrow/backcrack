@@ -36,6 +36,7 @@ def _try_lock(dev: str):
 
 
 def main() -> None:
+    cfg.make_library_dirs()
     if not Path(cfg.MKVCON).exists():
         print(f"WARNING: makemkvcon not found at {cfg.MKVCON} - video discs will fail.")
     if not cfg.CDPARANOIA:

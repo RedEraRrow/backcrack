@@ -26,6 +26,10 @@ def _default_config_dir() -> Path:
 CONFIG_DIR = Path(os.getenv("BACKCRACK_CONFIG_DIR") or _default_config_dir())
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
+# backbone keeps the key bindings, the hints switch and its log here too.
+from backbone import app as _app  # noqa: E402
+_app.configure("backcrack", CONFIG_DIR)
+
 # Settings changed from `backcrack watch`'s settings screen land here rather
 # than in real env vars, so they survive past this process without editing
 # this file. os.environ still wins when set (a one-off `FOO=bar` override
@@ -270,6 +274,10 @@ def use_library(path: Path) -> None:
     ENCDONE = STATE / "encdone"
     RIPLOG = STATE / "rip.log"
     ENCLOG = STATE / "encode.log"
+
+
+def make_library_dirs() -> None:
+    """Create LIBRARY and its state folders; only the daemons that write there call this."""
     for d in (LIBRARY, STATE, LOGDIR, QUEUE, DONEDIR, ENCDONE):
         d.mkdir(parents=True, exist_ok=True)
 

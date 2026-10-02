@@ -14,6 +14,7 @@ from backcrack.common import log
 
 
 def main() -> None:
+    cfg.make_library_dirs()
     if not Path(cfg.HBCLI).exists():
         print(f"WARNING: HandBrakeCLI not found at {cfg.HBCLI} - video jobs will fail.")
     if audio_ext() != cfg.AUDIO_FORMAT:

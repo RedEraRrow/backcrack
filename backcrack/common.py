@@ -31,6 +31,7 @@ def stop_daemons(*names: str) -> int:
 
 def spawn_daemon(name: str) -> None:
     """Start the `name` daemon in the background, output to STATE/<name>.out."""
+    cfg.make_library_dirs()
     spawn_module(f"backcrack.{name}", cfg.STATE / f"{name}.out")
 
 
