@@ -41,7 +41,7 @@ def main() -> None:
     print("-- running processes --------------------------------")
     procs = [f"{pid} {command}" for pid, command in find_daemons("ripd", "encd", "sortd", "swapd")]
     procs += subprocess.run(
-        ["pgrep", "-fl", "makemkvcon|HandBrakeCLI|cdparanoia"], capture_output=True, text=True,
+        ["pgrep", "-fl", "makemkvcon|HandBrakeCLI|paranoia"], capture_output=True, text=True,
     ).stdout.splitlines()
     print("\n".join(f"  {l}" for l in procs) or "  none")
 

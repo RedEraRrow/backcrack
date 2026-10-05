@@ -18,7 +18,7 @@ or from a `labels.map` override.
      (`backcrack/pattern.py:auto_video_tokens`). Purely pattern-matching on the
      label text - it has no idea what show or movie it's for.
    - Audio: `artist` and `album`, looked up from MusicBrainz using the
-     disc's table of contents from `cd-discid` (its MusicBrainz disc id, with a
+     disc's table of contents from `cd-paranoia` (its MusicBrainz disc id, with a
      near match when there's no exact one). No per-track title lookup - ripped tracks
      stay `track01.flac` etc.
 

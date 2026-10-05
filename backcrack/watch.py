@@ -25,7 +25,7 @@ from backbone.ui import (
     header_box, human_gb, rate_of_change, sparkline, spinner, truncate_text,
 )
 from backcrack import config as cfg
-from backcrack.disc import DVD_1X_BPS
+from backcrack.disc import CD_1X_BPS, DISC_BYTES_FILE, DVD_1X_BPS
 from backcrack.encode import PART
 from backbone.files import count_entries, disk_free
 from backbone.procs import ps_listing
@@ -56,13 +56,14 @@ _learned: set = set()
 _growth: dict = {}          # sd (source dir str) -> (last_kb, last_grow_ts)
 _history: dict = {}         # sd -> [(ts, kb), ...]
 _rate_history: dict = {}    # sd -> [rate, rate, ...]  (sparkline()'s own window)
+_audio_kb: dict = {}        # dest str -> exact KB of an audio rip, never calibrated
 _folder_counts: dict = {}   # class_file_counts(), refreshed every 15 frames
 
 
 def dev_for_dest(dest: Path, ps_out: str) -> str:
     target = str(dest)
     for line in ps_out.splitlines():
-        if ("makemkvcon" not in line and "cdparanoia" not in line) or target not in line:
+        if ("makemkvcon" not in line and "paranoia" not in line) or target not in line:
             continue
         m = re.search(r"dev:/dev/r(disk\d+)", line) or re.search(r"-d /dev/r(disk\d+)", line)
         if m:
@@ -85,12 +86,20 @@ def _fetch_disc_kb(key: str, dv: str) -> None:
 
 def disc_kb(dest: Path, ps_out: str) -> int:
     """This disc's own reported size in KB, or FALLBACK_KB until it's known.
+    An audio CD's is exact, from the size its rip recorded.
 
     `diskutil info` on a drive that is being read can take seconds, so it
     runs in a background thread and later ticks pick up the result from
     _vol_kb, rather than stalling the dashboard.
     """
     key = str(dest)
+    if key in _audio_kb:
+        return _audio_kb[key]
+    try:
+        _audio_kb[key] = int((dest / DISC_BYTES_FILE).read_text()) // 1024
+        return _audio_kb[key]
+    except (OSError, ValueError):
+        pass
     if key in _vol_kb:
         return _vol_kb[key]
     dv = dev_for_dest(dest, ps_out)
@@ -116,13 +125,13 @@ def learn_calib(dest: Path, kb: int, ps_out: str) -> None:
         _calib = (sum(_calib_samples) / len(_calib_samples)) * 0.92
 
 
-def sample(sd: str, now: float, kb: int) -> tuple:
+def sample(sd: str, now: float, kb: int, one_x_bps: int) -> tuple:
     kb_per_s = rate_of_change(_history.setdefault(sd, []), now, kb, WINDOW)
     if kb_per_s is None:
         return "measuring", ""
     mb_s = kb_per_s / 1024
     spark = sparkline(_rate_history.setdefault(sd, []), mb_s)
-    return f"{mb_s:.2f} MB/s {(mb_s * 1e6) / DVD_1X_BPS:.1f}x", spark
+    return f"{mb_s:.2f} MB/s {(mb_s * 1e6) / one_x_bps:.1f}x", spark
 
 
 def hb_pct(log_path: Path) -> int:
@@ -216,7 +225,7 @@ def render() -> list:
         if kb == 0:
             rate_s, spark = "analysing", ""
         else:
-            rate_s, spark = sample(str(sd), now, kb)
+            rate_s, spark = sample(str(sd), now, kb, CD_1X_BPS if str(dest) in _audio_kb else DVD_1X_BPS)
         rows.append((label, dv or "-", pct, human_gb(kb), human_gb(tot), rate_s, spark))
 
     if not rows:

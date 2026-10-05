@@ -21,12 +21,10 @@ def deps() -> list[Dep]:
         Dep("HandBrake", _path(cfg.HBCLI), "encoding video", hints={
             "macos": "brew install handbrake", "debian": "sudo apt install handbrake-cli",
             "other": "https://handbrake.fr/downloads2.php"}),
-        Dep("cdparanoia", _path(cfg.CDPARANOIA), "ripping audio CDs", hints={
-            "macos": "brew install cdparanoia", "debian": "sudo apt install cdparanoia"}),
+        Dep("cd-paranoia", _path(cfg.CDPARANOIA), "ripping and looking up audio CDs", hints={
+            "macos": "brew install libcdio-paranoia", "debian": "sudo apt install cdparanoia"}),
         Dep("flac", _path(cfg.FLAC), "encoding CD audio", hints={
             "macos": "brew install flac", "debian": "sudo apt install flac"}),
-        Dep("cd-discid", _path(cfg.CD_DISCID), "looking up CDs", hints={
-            "macos": "brew install cd-discid", "debian": "sudo apt install cd-discid"}),
         Dep("ffmpeg", _path(cfg.FFMPEG), "audio formats other than FLAC", hints={
             "macos": "brew install ffmpeg", "debian": "sudo apt install ffmpeg"}),
     ]
@@ -36,4 +34,4 @@ def doctor() -> None:
     """backcrack doctor: every tool it drives, found or how to install it."""
     from backbone.deps import report_lines
     print("\n".join(report_lines(deps())))
-    print("Paths can be set in settings.env (MKVCON, HBCLI, CDPARANOIA, FLAC, CD_DISCID, FFMPEG).")
+    print("Paths can be set in settings.env (MKVCON, HBCLI, CDPARANOIA, FLAC, FFMPEG).")

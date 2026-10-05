@@ -17,7 +17,7 @@ SWAPLOG = cfg.STATE / "swap.log"
 def idle() -> bool:
     if any(cfg.STATE.glob("lock-*")):
         return False
-    return not any(("makemkvcon" in l or "cdparanoia" in l) for l in ps_listing().splitlines())
+    return not any(("makemkvcon" in l or "paranoia" in l) for l in ps_listing().splitlines())
 
 
 def main() -> None:

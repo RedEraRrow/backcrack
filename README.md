@@ -27,7 +27,7 @@ one. `pipx ensurepath` puts `backcrack` on your PATH for new terminal windows.
 
 `backcrack doctor` lists the rippers and encoders it drives, found or how to
 install each. For everything: `brew install --cask makemkv` and
-`brew install handbrake cdparanoia flac cd-discid`. Paths it can't find
+`brew install handbrake libcdio-paranoia flac`. Paths it can't find
 itself go in `settings.env` (`MKVCON`, `HBCLI`, …).
 
 Every tool is a subcommand of the one command, `backcrack` (`backcrack
@@ -85,7 +85,7 @@ list, can be changed under Key bindings on that screen.
 - **DVD / Blu-ray** - MakeMKV rips each title to a lossless MKV, HandBrake
   encodes the ones matching a configured duration class - see
   `DURATION_CLASSES` below.
-- **Audio CD** - cdparanoia extracts each track losslessly
+- **Audio CD** - cd-paranoia extracts each track losslessly
   (`track01.cdda.wav`...), then each is compressed to `AUDIO_FORMAT` (flac
   by default) as `track01.flac`...
 
@@ -94,8 +94,8 @@ Both land in the same shape: `source/` (lossless rip) and `encoded/`
 than the main window.
 
 A video disc is known by its volume label. An audio CD has no useful label,
-so it is named `AudioCD-<n>tracks-<id>`, where the id is cd-discid's disc id
-(or, without cd-discid, a hash of cdparanoia's track table). That name is
+so it is named `AudioCD-<n>tracks-<id>`, where the id is the freedb disc id worked
+out from its track table. That name is
 what shows in the log and in `UNSORTED/`, and what a `labels.map` line for
 the CD has to use.
 
@@ -174,7 +174,7 @@ you see combing, set `DEINTERLACE_ARGS` to HandBrake's deinterlace flags,
 e.g. `DEINTERLACE_ARGS=--comb-detect --decomb`. Leave it empty for
 progressive sources.
 
-For audio, `cdparanoia -Q -d <device>` lists a disc's tracks directly if you
+For audio, `cd-paranoia -Q -d <device>` lists a disc's tracks directly if you
 want to sanity-check before ripping.
 
 ## Encoding throughput
@@ -250,7 +250,7 @@ The ones not covered elsewhere in this README:
 
 | Setting | Default | What it does |
 |---|---|---|
-| `MKVCON`, `HBCLI`, `CDPARANOIA`, `CD_DISCID`, `FLAC`, `FFMPEG` | found on PATH (MakeMKV at `/Applications/MakeMKV.app`) | tool paths |
+| `MKVCON`, `HBCLI`, `CDPARANOIA`, `FLAC`, `FFMPEG` | found on PATH (MakeMKV at `/Applications/MakeMKV.app`) | tool paths |
 | `NOTIFY_ENCODES` | `0` | also push when a disc finishes encoding |
 | `ACCENT` | `green` | the accent colour: `green`, `red`, `yellow`, `blue`, `magenta`, `cyan` (your terminal's own), `amber`, `coral`, `rose`, `lavender`, `sky`, `mint`, or `#RRGGBB` |
 | `WATCH_INTERVAL` | `1` | seconds between `watch` refreshes |
@@ -329,16 +329,15 @@ names). With another pattern or other folder names, don't use it.
 
 - **MakeMKV** (`makemkvcon`) - for DVD/Blu-ray. `brew install --cask makemkv`.
 - **HandBrakeCLI** - to encode video. `brew install handbrake`.
-- **cdparanoia** - for audio CDs. `brew install cdparanoia`.
+- **cd-paranoia** - for audio CDs: ripping, and the track table that names
+  each CD and looks up its artist and album. `brew install libcdio-paranoia`
+  (or `cdparanoia` from your Linux package manager).
 - **flac** (or ffmpeg) - to compress ripped audio. `brew install flac`.
   With neither, tracks are copied to `encoded/` as `.wav`.
-- **cd-discid** - optional, for automatic artist/album lookup on audio CDs.
-  `brew install cd-discid`. Without it, every CD goes to `UNSORTED/` until
-  you add a `labels.map` line.
 
 `backcrack doctor` checks all of them. A missing tool also gets a warning at
-startup rather than a silent failure: `ripd` warns about makemkvcon,
-cdparanoia and cd-discid, and `encd` about HandBrakeCLI and flac/ffmpeg. The
+startup rather than a silent failure: `ripd` warns about makemkvcon and
+cd-paranoia, and `encd` about HandBrakeCLI and flac/ffmpeg. The
 daemon still runs; that disc kind just won't rip or encode until the tool is
 installed.
 

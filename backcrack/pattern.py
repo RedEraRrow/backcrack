@@ -93,8 +93,8 @@ def auto_audio_tokens(dev: Optional[str]) -> Optional[dict]:
     toc = disc.cd_toc(dev) if dev else None
     if not toc:
         return None
-    # The MusicBrainz disc id (cd-discid's own id is freedb's, which MusicBrainz
-    # doesn't know), plus the toc so a near match is found when there's no exact one.
+    # The MusicBrainz disc id (the label's freedb id is one MusicBrainz doesn't
+    # know), plus the toc so a near match is found when there's no exact one.
     toc_param = "+".join(str(n) for n in (toc[0], toc[1], toc[2], *toc[3]))
     try:
         req = urllib.request.Request(

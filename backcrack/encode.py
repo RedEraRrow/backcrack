@@ -159,7 +159,7 @@ def process_audio_job(label: str, dest: Path) -> None:
     jobs = []
     ext = audio_ext()
     for f in sorted(src.glob("*.wav")):
-        # cdparanoia -B names tracks track01.cdda.wav
+        # cd-paranoia -B names tracks track01.cdda.wav
         out = dest / "encoded" / f"{f.stem.removesuffix('.cdda')}.{ext}"
         if out.exists() and out.stat().st_size > 0:
             n_skip += 1

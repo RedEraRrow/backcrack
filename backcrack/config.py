@@ -125,8 +125,7 @@ LIBRARY = Path(_env("LIBRARY", str(Path.home() / "Media" / "rips"))).expanduser(
 MKVCON = _env("MKVCON", _env("MKV", shutil.which("makemkvcon")
                                    or "/Applications/MakeMKV.app/Contents/MacOS/makemkvcon"))
 HBCLI = _env("HBCLI", shutil.which("HandBrakeCLI") or "/opt/homebrew/bin/HandBrakeCLI")
-CDPARANOIA = _env("CDPARANOIA", shutil.which("cdparanoia") or "")
-CD_DISCID = _env("CD_DISCID", shutil.which("cd-discid") or "")
+CDPARANOIA = _env("CDPARANOIA", shutil.which("cd-paranoia") or shutil.which("cdparanoia") or "")
 FLAC = _env("FLAC", shutil.which("flac") or "")
 FFMPEG = _env("FFMPEG", shutil.which("ffmpeg") or "")
 

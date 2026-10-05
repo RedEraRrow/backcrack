@@ -11,8 +11,9 @@ from pathlib import Path
 from backcrack import config as cfg
 
 
-# Optical drive speeds are quoted in multiples of DVD 1x.
+# Optical drive speeds are quoted in multiples of 1x for that kind of disc.
 DVD_1X_BPS = 1_385_000
+CD_1X_BPS = 176_400
 
 
 def raw(dev: str) -> str:
@@ -68,41 +69,33 @@ def pending_discs():
         yield dev, "audio", Path(dev).name
 
 
-def cd_discid(rdev: str) -> list:
-    """cd-discid's fields for the CD in `rdev` (freedb id, track count,
-    offsets..., seconds), or [] if it isn't installed or can't read it."""
-    if not cfg.CD_DISCID:
-        return []
-    try:
-        return subprocess.run([cfg.CD_DISCID, rdev], capture_output=True, text=True, timeout=15).stdout.split()
-    except (OSError, subprocess.TimeoutExpired):
-        return []
-
-
 def cd_toc(rdev: str):
     """The CD's table of contents as MusicBrainz wants it: (first track, last
-    track, lead-out, [track offsets]) in sectors, or None. Uses cd-discid's
-    exact --musicbrainz output; an older cd-discid only gives the length in
-    whole seconds, so the lead-out is then approximate (MusicBrainz's toc
-    lookup still finds near matches)."""
-    if not cfg.CD_DISCID:
+    track, lead-out, [track offsets]) in sectors from the disc's start, or
+    None. Read from cd-paranoia's track list, which counts from track 1's
+    pregap, hence the 150. Audio tracks only, so on an enhanced CD the
+    lead-out is the last audio track's end (MusicBrainz's toc lookup still
+    finds the near match)."""
+    if not cfg.CDPARANOIA:
         return None
     try:
-        out = subprocess.run([cfg.CD_DISCID, "--musicbrainz", rdev], capture_output=True, text=True, timeout=15).stdout.split()
+        out = subprocess.run([cfg.CDPARANOIA, "-Q", "-d", rdev], capture_output=True, text=True, timeout=30).stderr
     except (OSError, subprocess.TimeoutExpired):
-        out = []
-    nums = [int(x) for x in out if x.isdigit()]
-    if len(nums) >= 3 and nums[0] == len(nums) - 2:          # count, offsets..., lead-out
-        return 1, nums[0], nums[-1], nums[1:-1]
-    fields = cd_discid(rdev)                                 # freedb: id, count, offsets..., seconds
-    if len(fields) < 3 or not fields[1].isdigit():
         return None
-    n = int(fields[1])
-    try:
-        offsets = [int(x) for x in fields[2:2 + n]]
-        return 1, n, int(fields[2 + n]) * 75, offsets
-    except (ValueError, IndexError):
+    # "  1.    16503 [03:40.03]        0 [00:00.00]    no   no  2": number, length, begin
+    tracks = [(int(m[1]), int(m[2]), int(m[3]))
+              for m in re.finditer(r"^\s*(\d+)\.\s+(\d+)\s+\[[^]]*\]\s+(\d+)", out, re.M)]
+    if not tracks:
         return None
+    first, last = tracks[0][0], tracks[-1][0]
+    return first, last, tracks[-1][2] + tracks[-1][1] + 150, [begin + 150 for _, _, begin in tracks]
+
+
+def freedb_id(toc) -> str:
+    """The freedb (CDDB) disc id for a toc, as cd-discid printed it."""
+    _, _, leadout, offsets = toc
+    digits = sum(sum(map(int, str(o // 75))) for o in offsets)
+    return f"{(digits % 255) << 24 | (leadout // 75 - offsets[0] // 75) << 8 | len(offsets):08x}"
 
 
 def musicbrainz_discid(toc) -> str:
@@ -116,26 +109,22 @@ def musicbrainz_discid(toc) -> str:
     return digest.translate(str.maketrans("+/=", "._-"))
 
 
-def audio_label(rdev: str):
-    """A name for the CD in `rdev` that stays the same whichever drive it is
-    in: "AudioCD-<n>tracks-<id>". The id is cd-discid's, or a hash of
-    cdparanoia's track table when cd-discid isn't installed. None if
-    neither can read the disc.
-    """
-    fields = cd_discid(rdev)
-    if len(fields) >= 2 and fields[1].isdigit():
-        return f"AudioCD-{fields[1]}tracks-{fields[0]}"
-    if not cfg.CDPARANOIA:
-        return None
-    try:
-        toc = subprocess.run([cfg.CDPARANOIA, "-Q", "-d", rdev], capture_output=True, text=True, timeout=30).stderr
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    tracks = [line.split() for line in toc.splitlines() if re.match(r"^\s*\d+\.\s+\d+", line)]
-    if not tracks:
-        return None
-    digest = hashlib.sha1(" ".join(t[1] for t in tracks).encode()).hexdigest()[:8]
-    return f"AudioCD-{len(tracks)}tracks-{digest}"
+def audio_label(toc) -> str:
+    """A name for a CD that stays the same whichever drive it is in."""
+    return f"AudioCD-{len(toc[3])}tracks-{freedb_id(toc)}"
+
+
+# Holds audio_bytes() for a rip in progress, in its folder, for watch's
+# progress bar: cd-paranoia runs inside the folder rather than naming it, so
+# watch can't match the rip to its drive the way it does for MakeMKV.
+DISC_BYTES_FILE = ".disc-bytes"
+
+
+def audio_bytes(toc) -> int:
+    """What ripping every track to WAV comes to: 2352 bytes a sector, plus
+    each file's 44-byte header."""
+    _, _, leadout, offsets = toc
+    return (leadout - offsets[0]) * 2352 + 44 * len(offsets)
 
 
 _DRV_RE = re.compile(r'^DRV:(\d+),2,\d+,\d+,"([^"]*)","([^"]*)","([^"]*)"')

@@ -1,7 +1,7 @@
 """Show every title on a video disc (or a ripped disc folder)
 and how the current thresholds classify it. Run this on the first disc of
 each kind before trusting a whole shelf of them. Video discs only - an audio
-CD's tracks are unambiguous; list them with `cdparanoia -Q -d <device>`.
+CD's tracks are unambiguous; list them with `cd-paranoia -Q -d <device>`.
 
     titles "/path/to/library/Season 1/Disc 1"
     titles /Volumes/SOME_LABEL             # works on a mounted disc too

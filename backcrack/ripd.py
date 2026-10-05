@@ -40,9 +40,7 @@ def main() -> None:
     if not Path(cfg.MKVCON).exists():
         print(f"WARNING: makemkvcon not found at {cfg.MKVCON} - video discs will fail. See `backcrack doctor`.")
     if not cfg.CDPARANOIA:
-        print("WARNING: cdparanoia not found - audio CDs will fail. See `backcrack doctor`.")
-    if not cfg.CD_DISCID:
-        print("WARNING: cd-discid not found - audio CDs will go to UNSORTED/. See `backcrack doctor`.")
+        print("WARNING: cd-paranoia not found - audio CDs will fail. See `backcrack doctor`.")
     if not cfg.NTFY_TOPIC:
         print("WARNING: NTFY_TOPIC is not set (env var or settings.env) - no pushes will be sent.")
 

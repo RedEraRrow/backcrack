@@ -139,6 +139,7 @@ def mark_unsorted_kind(dest: Path, kind: str) -> None:
 
 
 def finish_rip(label: str, dest: Path, cdev: str, ok: bool, mins: int, kind: str) -> None:
+    (dest / disc.DISC_BYTES_FILE).unlink(missing_ok=True)
     kb = dir_size_kb(dest)
     gb = human_gb(kb)
     rel = str(dest.relative_to(cfg.LIBRARY))
@@ -243,7 +244,9 @@ def rip_audio_disc(dev: str, label: str) -> None:
     # is only the device name there, so name the CD itself now this thread
     # holds the drive.
     cdev, rdev = dev, disc.raw(dev)
-    label = disc.audio_label(rdev) or label
+    toc = disc.cd_toc(rdev)
+    if toc:
+        label = disc.audio_label(toc)
     if already_handled(label, cdev):
         return
 
@@ -256,6 +259,8 @@ def rip_audio_disc(dev: str, label: str) -> None:
     mark_unsorted_kind(dest, "audio")
 
     nsrc = dest / "source"; nsrc.mkdir(parents=True, exist_ok=True)
+    if toc:
+        (dest / disc.DISC_BYTES_FILE).write_text(f"{disc.audio_bytes(toc)}\n")
     t0 = time.monotonic()
     rc = subprocess.run(
         [cfg.CDPARANOIA, "-d", rdev, "-B", "1-"], cwd=nsrc, capture_output=True, timeout=None,

@@ -31,7 +31,7 @@ def _recently_touched(d: Path) -> bool:
 def _named_by_process(d: Path) -> bool:
     target = str(d)
     return any(
-        (("makemkvcon" in line) or ("HandBrakeCLI" in line) or ("cdparanoia" in line)) and target in line
+        (("makemkvcon" in line) or ("HandBrakeCLI" in line) or ("paranoia" in line)) and target in line
         for line in ps_listing().splitlines()
     )
 
