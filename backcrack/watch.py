@@ -380,11 +380,11 @@ def _add_label_entry() -> None:
     if label is None:
         return
     if label == manual:
-        label = text("Disc label (exact volume label from the log)")
+        label = text("Disc label, exactly as the log has it")
     if not label:
         return
 
-    audio = confirm("Audio disc? (No = video)", default=False)
+    audio = confirm("Is it an audio disc rather than video?", default=False)
     pattern = cfg.PATTERN_AUDIO if audio else cfg.PATTERN_VIDEO
     pairs = []
     for tok in re.findall(r"%([a-zA-Z0-9_]+)%", pattern):
