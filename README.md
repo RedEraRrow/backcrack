@@ -13,9 +13,12 @@ Python, stdlib only apart from `backbone`, the library the back* tools share
 macOS only (it drives the drives through diskutil and drutil). Starting from
 nothing:
 
-    # Homebrew, if you don't have it yet (on Apple Silicon it prints two
-    # lines to run afterwards: run them)
+    # Homebrew, if you don't have it yet (it asks for your password)
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    # put brew on your PATH, now and in new windows (Apple Silicon; does
+    # nothing on an Intel Mac)
+    echo 'eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null)"' >> ~/.zprofile
+    eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null)"
 
     brew install pipx
     pipx ensurepath             # then open a new terminal window
