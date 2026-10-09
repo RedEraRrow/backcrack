@@ -7,6 +7,8 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
+from backbone.log import log as diag
+
 from backcrack import config as cfg
 from backcrack import disc
 
@@ -104,10 +106,12 @@ def auto_audio_tokens(dev: Optional[str]) -> Optional[dict]:
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read())
-    except Exception:
+    except Exception as e:
+        diag.warning("MusicBrainz lookup for %s failed: %s: %s", dev, type(e).__name__, e)
         return None
     releases = data.get("releases") or []
     if not releases:
+        diag.info("MusicBrainz has no release for disc id %s", disc.musicbrainz_discid(toc))
         return None
     release = releases[0]
     artist_credit = release.get("artist-credit") or []

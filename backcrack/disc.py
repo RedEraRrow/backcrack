@@ -8,6 +8,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from backbone.log import log as diag
+
 from backcrack import config as cfg
 
 
@@ -80,12 +82,14 @@ def cd_toc(rdev: str):
         return None
     try:
         out = subprocess.run([cfg.CDPARANOIA, "-Q", "-d", rdev], capture_output=True, text=True, timeout=30).stderr
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired) as e:
+        diag.warning("cd-paranoia -Q on %s failed: %s", rdev, e)
         return None
     # "  1.    16503 [03:40.03]        0 [00:00.00]    no   no  2": number, length, begin
     tracks = [(int(m[1]), int(m[2]), int(m[3]))
               for m in re.finditer(r"^\s*(\d+)\.\s+(\d+)\s+\[[^]]*\]\s+(\d+)", out, re.M)]
     if not tracks:
+        diag.warning("cd-paranoia -Q on %s listed no tracks: %s", rdev, out.strip()[-300:])
         return None
     first, last = tracks[0][0], tracks[-1][0]
     return first, last, tracks[-1][2] + tracks[-1][1] + 150, [begin + 150 for _, _, begin in tracks]
@@ -136,7 +140,8 @@ def mkv_drives(timeout: int = 60) -> list:
     try:
         out = subprocess.run([cfg.MKVCON, "-r", "--cache=1", "info", "disc:9999"],
                              capture_output=True, text=True, timeout=timeout).stdout
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired) as e:
+        diag.warning("makemkvcon drive listing failed: %s", e)
         return []
     return [m.groups() for m in map(_DRV_RE.match, out.splitlines()) if m]
 

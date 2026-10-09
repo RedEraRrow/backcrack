@@ -26,8 +26,8 @@ def _default_config_dir() -> Path:
 CONFIG_DIR = Path(os.getenv("BACKCRACK_CONFIG_DIR") or _default_config_dir())
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
-# backbone keeps the key bindings, the hints switch and its log here too.
-from backbone import app as _app  # noqa: E402
+# backbone keeps the key bindings, the hints switch and its diagnostics log here too.
+from backbone import app as _app, log as _log  # noqa: E402
 _app.configure("backcrack", CONFIG_DIR)
 
 # Settings changed from `backcrack watch`'s settings screen land here rather
@@ -65,7 +65,7 @@ def save_setting(name: str, value: str) -> None:
     """Persist one setting to SETTINGS_FILE, replacing its line if already
     present. Only processes started afterwards see it (ripd/encd need
     restarting); a caller that wants it in its own running `cfg` has to set
-    that too (see watch.py).
+    that too (see settings.py).
     """
     lines = SETTINGS_FILE.read_text().splitlines() if SETTINGS_FILE.exists() else []
     out, found = [], False
@@ -223,38 +223,15 @@ PATTERN_AUDIO = _env("PATTERN_AUDIO", "%artist%/%album%")
 # on. A failed disc is deliberately left in the drive so it retries itself.
 MAX_RETRIES = _env_int("MAX_RETRIES", 3)
 
-# ---- settings exposed to `backcrack watch`'s settings screen -------------
-# (env var, type, one-line label). Add a tuple here for any setting above
-# that should be editable there - type is "str", "int", "bool", or "path".
-# Nothing else in the pipeline reads this list; it's UI metadata only.
-SETTINGS = [
-    ("LIBRARY", "path", "Library root"),
-    ("RIP_MODE", "str", "Rip mode (titles / video_ts)"),
-    ("DURATION_CLASSES", "str", "Duration classes (name:min-max:folder:quality[:dedup],...)"),
-    ("ENCODE_JOBS", "int", "Concurrent encode jobs"),
-    ("VIDEO_ENCODER", "str", "HandBrake video encoder"),
-    ("ENCODER_PRESET", "str", "HandBrake encoder preset"),
-    ("ENCODE_THREADS", "int", "Threads per encode job"),
-    ("DEINTERLACE_ARGS", "str", "Deinterlace args (blank = off)"),
-    ("AUDIO_FORMAT", "str", "Audio rip format"),
-    ("PATTERN_VIDEO", "str", "Video destination pattern"),
-    ("PATTERN_AUDIO", "str", "Audio destination pattern"),
-    ("MAX_RETRIES", "int", "Max retries before giving up on a disc"),
-    ("NOTIFY_ENCODES", "bool", "Notify on encode complete"),
-    ("LAUNCH_RIPD", "bool", "Bare `backcrack` also launches ripd"),
-    ("LAUNCH_ENCD", "bool", "Bare `backcrack` also launches encd"),
-    ("LAUNCH_SORTD", "bool", "Bare `backcrack` also launches sortd"),
-    ("LAUNCH_WATCH", "bool", "Bare `backcrack` also launches watch"),
-    ("MIN_TITLE_S", "int", "Shortest title MakeMKV rips (seconds)"),
-    ("NTFY_TOPIC", "str", "ntfy topic (blank = no pushes)"),
-    ("NTFY_SERVER", "str", "ntfy server"),
-    ("ACCENT", "accent", "Accent colour (green, red, blue, amber… or #RRGGBB)"),
-]
-
 # The accent colour of every screen (backbone.ui.ACCENT_PRESETS key or
 # "#RRGGBB"), applied here once so each tool gets it by importing config.
 ACCENT = _env("ACCENT", "green")
 _ui.set_accent(ACCENT)
+
+# backbone's diagnostics log, CONFIG_DIR/backcrack.log: what failed quietly
+# (a lookup, a scan, a crashed rip thread) and why. Every process writes it.
+DEBUG = _env("DEBUG", "0") == "1"
+_log.configure(DEBUG)
 
 # Derived. Don't edit.
 # Your files, in CONFIG_DIR (see the top of this file): manual disc->token

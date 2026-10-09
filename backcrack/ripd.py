@@ -10,6 +10,8 @@ import os
 import time
 from pathlib import Path
 
+from backbone.log import log as diag
+
 from backcrack import config as cfg
 from backcrack import disc
 from backcrack.rip import rip_video_disc, rip_audio_disc
@@ -66,6 +68,9 @@ def main() -> None:
                 def _run(dev=dev, label=label, target=target, lock=lock):
                     try:
                         target(dev, label)
+                    except Exception:
+                        diag.exception("rip of %s in %s crashed", label, dev)
+                        raise
                     finally:
                         lock.unlink(missing_ok=True)
 

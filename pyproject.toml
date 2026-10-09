@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "backpack-backcrack"
-version = "0.2.1"
+version = "0.3.0"
 description = "CD/DVD/Blu-ray rip pipeline - MakeMKV/HandBrake for video, cdparanoia for audio, dynamic %token% library patterning."
 requires-python = ">=3.10"
 readme = "README.md"
 license = { text = "MIT" }
-dependencies = ["backpack-backbone>=0.3,<0.4"]
+dependencies = ["backpack-backbone>=0.3.2,<0.4"]
 classifiers = [
     "Environment :: Console :: Curses",
     "Topic :: Multimedia :: Sound/Audio :: CD Audio :: CD Ripping",

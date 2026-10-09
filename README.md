@@ -80,8 +80,14 @@ Check progress any time:
     backcrack watch      # live view
 
 In `watch`, `q` quits (and offers to stop ripd, encd and sortd with it) and
-`s` opens the settings screen - see [Settings](#settings). Both keys, and those of every
-list, can be changed under Key bindings on that screen.
+`s` opens the settings screen - see [Settings](#settings). `?` shows or hides
+the keys along the bottom. The keys, and those of every list, can be changed
+under Key bindings on that screen.
+
+Each part of `watch` is in its own box: the overview, what's ripping, what's
+encoding, and the latest rip events. In a short window the boxes that matter
+least give up their room first (Recent, then the overview, then Encoding);
+too small for any box, it asks for a bigger window.
 
 ## What it detects
 
@@ -244,10 +250,12 @@ Each setting is read, in order, from an environment variable, then
 `backcrack/config.py`. So a one-off `LIBRARY=... ripd` overrides
 everything, and `settings.env` holds what you want every time.
 
-`s` in `watch` opens a settings screen over most of them and writes your
-changes to `settings.env`. The tool paths below aren't on it; set those in
+`s` in `watch` opens the Settings screen: most of them, in sections, each
+with its value beside it. Enter changes one (space flips an on/off one), and
+it's saved to `settings.env` at once. A number or a duration class that
+can't be read isn't taken. The tool paths below aren't on it; set those in
 `settings.env` or the environment. The daemons read their settings at
-startup, so restart `ripd`, `encd` or `sortd` to pick a change up.
+startup, so after a change the screen says which running ones to restart.
 
 The ones not covered elsewhere in this README:
 
@@ -255,6 +263,7 @@ The ones not covered elsewhere in this README:
 |---|---|---|
 | `MKVCON`, `HBCLI`, `CDPARANOIA`, `FLAC`, `FFMPEG` | found on PATH (MakeMKV at `/Applications/MakeMKV.app`) | tool paths |
 | `NOTIFY_ENCODES` | `0` | also push when a disc finishes encoding |
+| `DEBUG` | `0` | the diagnostics log, `backcrack.log` in your config directory: what failed quietly (a MusicBrainz lookup, a HandBrake scan, a crashed rip) and why |
 | `ACCENT` | `green` | the accent colour: `green`, `red`, `yellow`, `blue`, `magenta`, `cyan` (your terminal's own), `amber`, `coral`, `rose`, `lavender`, `sky`, `mint`, or `#RRGGBB` |
 | `WATCH_INTERVAL` | `1` | seconds between `watch` refreshes |
 | `SORT_INTERVAL` | `5` | seconds between `sortd` passes |
@@ -286,7 +295,7 @@ The directory is `$BACKCRACK_CONFIG_DIR` if set, else
 first run. Point `BACKCRACK_CONFIG_DIR` somewhere else to keep separate sets
 of overrides for separate shelves.
 
-The same screen has an entry for adding a `labels.map` line, which is the
+The same screen has Add a labels.map line…, which is the
 manual escape hatch for a disc whose %tokens% couldn't be resolved - pick it
 out of `UNSORTED/`, fill in the tokens the active pattern needs, and `sortd`
 files it within a few seconds.

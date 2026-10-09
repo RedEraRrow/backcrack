@@ -59,7 +59,8 @@ backcrack/
 │   ├── encd.py             #   and upgrade ripd mid-run
 │   ├── sortd.py
 │   ├── swapd.py
-│   ├── watch.py            # The live dashboard and settings screen
+│   ├── watch.py            # The live dashboard
+│   ├── settings.py         # watch's Settings screen: every setting's section, kind and label
 │   ├── status.py           # One-shot text snapshot of the same
 │   ├── titles.py           # Tools: list a disc's titles, drive read speed,
 │   ├── diskspeed.py        #   name encoded episodes
@@ -102,10 +103,17 @@ two:
 ## Style rules
 
 - No emoji, no decorative colour. `watch.py` uses two colours: backbone's
-  `PRIMARY` for anything active, finished or counted, and `RED` for `FAIL`
-  lines, whatever `ACCENT` is set to. Everything else is weight and
-  brightness (bold, dim, white). Colour switches itself off when not
-  writing to a terminal (`NO_COLOR=1`, or piped output).
+  `PRIMARY` for progress and finished rips, and `RED` for `FAIL` lines,
+  whatever `ACCENT` is set to. Everything else is weight and brightness
+  (bold, dim, white). Colour switches itself off when not writing to a
+  terminal (`NO_COLOR=1`, or piped output).
+- `watch` draws through backbone like every back* screen: each section in
+  a `box_lines` box, the hint bar as chrome under them (`run_dashboard`'s
+  `hints`), small windows handled by backbone. A box that doesn't fit isn't
+  drawn, content and all; `_stack` hands out the rows by priority.
+- Anything that fails quietly (a lookup, a scan, a timeout) is noted in
+  backbone's diagnostics log as `diag`, on with `DEBUG=1`. `log` in
+  backcrack is the daemons' own record (`rip.log`, `encode.log`).
 - Every deliberate simplification gets a comment naming the ceiling and
   what to do about it, not a silent gap. Grep for `ponytail:` in
   `backcrack/pattern.py` for the current one.

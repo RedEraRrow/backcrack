@@ -18,11 +18,13 @@ import time
 from pathlib import Path
 
 from backbone.nav import NAV_STACK
-from backbone import keys, ui
-from backbone.prompt.core import hint, run_dashboard
+from backbone import keys
+from backbone.log import log as diag
+from backbone.prompt.chrome import chrome_room
+from backbone.prompt.core import border_right, box_lines, run_dashboard
 from backbone.ui import (
-    Colors as C, bar, clip_ansi, content_width, dir_size_kb, get_terminal_width,
-    header_box, human_gb, rate_of_change, sparkline, spinner, truncate_text,
+    Colors as C, content_width, dir_size_kb, human_gb, progress_cells, rate_of_change,
+    sparkline, spinner, truncate_text, visual_len,
 )
 from backcrack import config as cfg
 from backcrack.disc import CD_1X_BPS, DISC_BYTES_FILE, DVD_1X_BPS
@@ -30,8 +32,7 @@ from backcrack.encode import PART
 from backbone.files import count_entries, disk_free
 from backbone.procs import ps_listing
 from backcrack.common import class_file_counts, stop_daemons
-
-NAV_STACK[:] = ["backcrack", "watch"]
+from backcrack.settings import open_settings
 
 TOTAL_DISCS = cfg.TOTAL_DISCS
 INTERVAL = cfg.WATCH_INTERVAL
@@ -43,7 +44,7 @@ FALLBACK_KB = cfg.FALLBACK_KB
 # FAIL is red whatever the accent colour is, and everything else is weight
 # and brightness (bold, dim, white) rather than hue.
 R, B, DIM = C.RESET, C.BOLD, C.DIM
-FRAME, TXT, MUTE = C.DIM, C.WHITE, C.DIM
+TXT, MUTE = C.WHITE, C.DIM
 PRIMARY, FAIL = C.PRIMARY, C.RED
 
 
@@ -75,6 +76,7 @@ def _fetch_disc_kb(key: str, dv: str) -> None:
     try:
         info = subprocess.run(["diskutil", "info", f"/dev/{dv}"], capture_output=True, text=True, timeout=15).stdout
     except subprocess.TimeoutExpired:
+        diag.warning("diskutil info /dev/%s timed out; %s keeps the assumed disc size", dv, key)
         info = ""
     # "Disk Size" is the media's own capacity. "Volume Total Space" often
     # reads 0 here, because rip_video_disc() unmounts the disc to rip it.
@@ -148,52 +150,70 @@ def hb_pct(log_path: Path) -> int:
 FRAMES = 0
 
 
-def render() -> list:
-    global FRAMES
-    now = time.time()
-    cols = content_width()
-    spin = spinner(FRAMES)
+def _hints() -> list:
+    return [(keys.label("watch.quit", first=True), "quit"),
+            (keys.label("watch.settings", first=True), "settings")]
 
-    ripped, queued, encd = (count_entries(d) for d in (cfg.DONEDIR, cfg.QUEUE, cfg.ENCDONE))
 
-    if FRAMES % 15 == 0 or not _folder_counts:
-        _folder_counts.clear()
-        _folder_counts.update(class_file_counts())
+def _stack(boxes: list, room: int, width: int) -> list:
+    """`boxes`, each (rank, title, right, lines, keep_end), drawn top to bottom
+    in `room` rows. Rows go to the lowest rank first; a box left fewer than
+    three (its borders and one line) isn't drawn at all, and one left short of
+    its lines shows its first ones, or with keep_end its last."""
+    heights, left = {}, room
+    for i in sorted(range(len(boxes)), key=lambda i: boxes[i][0]):
+        h = min(len(boxes[i][3]) + 2, left)
+        if h >= 3:
+            heights[i] = h
+            left -= h
+    out = []
+    for i, (_rank, title, right, lines, keep_end) in enumerate(boxes):
+        if i in heights:
+            shown = lines[len(lines) - (heights[i] - 2):] if keep_end else lines
+            out += box_lines(shown, width, heights[i], title, right)
+    return out
 
-    left = f"  BACKCRACK   {cfg.LIBRARY.name}   mode: {cfg.RIP_MODE}"
-    right = f"{time.strftime('%H:%M:%S')}  "
-    lines = header_box(left, right, cols, spin)
-    lines.append("")
 
+def _eta(now: float, ripped: int) -> str:
+    if ripped <= 0 or not cfg.RIPLOG.exists():
+        return "calculating"
+    first_start = None
+    for ln in cfg.RIPLOG.read_text().splitlines():
+        if "START" in ln:
+            try:
+                first_start = time.mktime(time.strptime(ln[:19], "%Y-%m-%d %H:%M:%S"))
+            except ValueError:
+                pass
+            break
+    elapsed_h = (now - first_start) / 3600 if first_start else 0
+    if elapsed_h <= 0:
+        return "calculating"
+    remaining = (TOTAL_DISCS - ripped) / (ripped / elapsed_h)
+    return f"{int(remaining)}h{int((remaining - int(remaining)) * 60):02d}m left"
+
+
+def _first_fitting(options: list, room: int) -> str:
+    """The first of `options` no wider than `room` columns, else the last."""
+    return next((o for o in options if visual_len(o) <= room), options[-1])
+
+
+def _overview_lines(now: float, ripped: int, inner: int) -> list:
+    """Discs and Disk, each giving up whole parts from its end when short of room."""
     if TOTAL_DISCS > 0:
         pct = ripped * 100 // TOTAL_DISCS
-        eta = "calculating"
-        if ripped > 0:
-            first_start = None
-            if cfg.RIPLOG.exists():
-                for ln in cfg.RIPLOG.read_text().splitlines():
-                    if "START" in ln:
-                        try:
-                            first_start = time.mktime(time.strptime(ln[:19], "%Y-%m-%d %H:%M:%S"))
-                        except ValueError:
-                            pass
-                        break
-            if first_start:
-                elapsed_h = (now - first_start) / 3600
-                if elapsed_h > 0:
-                    remaining = (TOTAL_DISCS - ripped) / (ripped / elapsed_h)
-                    eta = f"{int(remaining)}h{int((remaining - int(remaining)) * 60):02d}m left"
-        lines.append(f"  {MUTE}DISCS{R}  {bar(pct, 40 if cols > 90 else 24, PRIMARY)}  "
-                     f"{B}{ripped}{R}/{TOTAL_DISCS}{TXT}{pct}%{R}  {MUTE}{eta}{R}")
+        count = f" {B}{ripped}{R}/{TOTAL_DISCS}"
+        tail = _first_fitting([f"{count}  {TXT}{pct}%{R}  {MUTE}{_eta(now, ripped)}{R}",
+                               f"{count}  {TXT}{pct}%{R}", count], inner - 7 - 4)
+        bw = max(4, min(40, inner - 7 - visual_len(tail)))
+        discs = f"{MUTE}Discs{R}  {progress_cells(pct / 100, bw)}{tail}"
     else:
-        lines.append(f"  {MUTE}DISCS{R}   {TXT}{ripped} ripped{R}")
+        discs = f"{MUTE}Discs{R}  {TXT}{ripped} ripped{R}"
+    free = f"{MUTE}Disk{R}   {TXT}{disk_free(cfg.LIBRARY)} free{R}"
+    disk = _first_fitting([f"{free}   {MUTE}library{R} {TXT}{human_gb(dir_size_kb(cfg.LIBRARY))} GB{R}", free], inner)
+    return [discs, disk]
 
-    lines.append(f"  {MUTE}DISK{R}   {TXT}{disk_free(cfg.LIBRARY)} free{R}   {MUTE}library{R} {TXT}{human_gb(dir_size_kb(cfg.LIBRARY))} GB{R}")
-    lines.append("")
 
-    # ---- RIPPING ------------------------------------------------------------
-    lines.append(f"  {PRIMARY}RIPPING{R}")
-    ps_out = ps_listing()   # once per frame: reused for every disc below and by ENCODING
+def _ripping_lines(now: float, ps_out: str, inner: int) -> list:
     rows = []
     # Any depth, since a pattern can nest a disc's folder as deep as it likes.
     sources = sorted(p for p in cfg.LIBRARY.rglob("source") if p.is_dir() and ".ripstate" not in p.parts)
@@ -229,172 +249,82 @@ def render() -> list:
         rows.append((label, dv or "-", pct, human_gb(kb), human_gb(tot), rate_s, spark))
 
     if not rows:
-        lines.append(f"   {DIM}idle, insert a disc{R}")
-    else:
-        w2 = max(3, max(len(r[1]) for r in rows))
-        w3 = max(3, max(len(r[3]) for r in rows))
-        w4 = max(3, max(len(r[4]) for r in rows))
-        w5 = max(4, max(len(r[5]) for r in rows))
-        # Fixed per-row overhead (spacing, "/", "GB", "%", the pointer/pct
-        # columns) - everything except the name and the bar, which split
-        # whatever's left of `cols` between them instead of a hardcoded cap,
-        # so the row can never run past the terminal's actual width.
-        fixed = 6 + w2 + w3 + w4 + w5 + 26
-        w1 = max(4, min(cols - fixed - 8, max(len(r[0]) for r in rows)))
-        bw = max(4, cols - fixed - w1)
-        for label, dv, pct, gb, tot_gb, rate_s, spark in rows:
-            nm = ("…" + label[-(w1 - 1):]) if len(label) > w1 else label
-            lines.append(
-                f"   {B}{nm:<{w1}}{R} {DIM}{dv:<{w2}}{R} {bar(pct, bw, PRIMARY)} {TXT}{pct:>3}%{R} "
-                f"{TXT}{gb:>{w3}}{R}{MUTE}/{tot_gb:<{w4}} GB{R}  {TXT}{rate_s:>{w5}}{R} {DIM}{spark}{R}"
-            )
-    lines.append("")
+        return [f"{DIM}idle, insert a disc{R}"]
+    w2 = max(3, max(len(r[1]) for r in rows))
+    w3 = max(3, max(len(r[3]) for r in rows))
+    w4 = max(3, max(len(r[4]) for r in rows))
+    w5 = max(4, max(len(r[5]) for r in rows))
+    # Everything but the name and the bar (spacing, "/", "GB", "%", the
+    # sparkline), which split what's left of the box between them.
+    fixed = w2 + w3 + w4 + w5 + 29
+    w1 = max(4, min(inner - fixed - 8, max(len(r[0]) for r in rows)))
+    bw = max(4, inner - fixed - w1)
+    lines = []
+    for label, dv, pct, gb, tot_gb, rate_s, spark in rows:
+        nm = truncate_text(label, w1, front=True)
+        lines.append(
+            f"{B}{nm:<{w1}}{R} {DIM}{dv:<{w2}}{R} {progress_cells(pct / 100, bw)} {TXT}{pct:>3}%{R} "
+            f"{TXT}{gb:>{w3}}{R}{MUTE}/{tot_gb:<{w4}} GB{R}  {TXT}{rate_s:>{w5}}{R} {DIM}{spark}{R}"
+        )
+    return lines
 
-    # ---- ENCODING -------------------------------------------------------------
-    folder_counts = "  ".join(f"{MUTE}{folder}{R} {PRIMARY}{n}{R}" for folder, n in _folder_counts.items())
-    lines.append(
-        f"  {PRIMARY}ENCODING{R}  {MUTE}queue{R} {TXT}{queued}{R}  {MUTE}done{R} {TXT}{encd}{R}  {folder_counts}"
-    )
-    enc_rows = []
+
+def _encoding_lines(ps_out: str, inner: int) -> list:
+    rows = []
     for m in re.finditer(r"-o (.+?\.mkv) --format", ps_out):
         name = Path(m.group(1)).name.replace(PART + ".mkv", ".mkv")
-        pct = hb_pct(cfg.LOGDIR / f"{name}.hb.log")
-        enc_rows.append((name, pct))
-    if not enc_rows:
-        lines.append(f"   {DIM}idle{R}")
-    else:
-        fixed2 = 6 + 10
-        ew = max(8, min(cols - fixed2 - 8, max(len(n) for n, _ in enc_rows)))
-        bw2 = max(4, cols - fixed2 - ew)
-        for name, pct in enc_rows:
-            nm2 = ("…" + name[-(ew - 1):]) if len(name) > ew else name
-            lines.append(f"   {TXT}{nm2:<{ew}}{R} {bar(pct, bw2, PRIMARY)} {TXT}{pct:>3}%{R}")
-    lines.append("")
-
-    lines.append(f"  {MUTE}RECENT{R}")
-    if cfg.RIPLOG.exists():
-        for ln in cfg.RIPLOG.read_text().splitlines()[-5:]:
-            color = MUTE
-            if "OK    " in ln:
-                color = PRIMARY
-            elif "FAIL  " in ln:
-                color = FAIL
-            elif "START " in ln:
-                color = TXT
-            elif "SKIP  " in ln:
-                color = DIM
-            lines.append(f"   {color}{truncate_text(ln[11:], max(4, cols - 3))}{R}")
-    lines.append("")
-    lines.append(hint((keys.label("watch.quit", first=True), "quit"),
-                      (keys.label("watch.settings", first=True), "settings")))
-
-    FRAMES += 1
-    # Clip every line to the terminal's full width so nothing wraps,
-    # however narrow the window.
-    raw_w = get_terminal_width()
-    return [clip_ansi(line, raw_w) for line in lines]
+        rows.append((name, hb_pct(cfg.LOGDIR / f"{name}.hb.log")))
+    if not rows:
+        return [f"{DIM}idle{R}"]
+    ew = max(8, min(inner - 6 - 8, max(len(n) for n, _ in rows)))
+    bw = max(4, inner - 6 - ew)
+    return [f"{TXT}{truncate_text(name, ew, front=True):<{ew}}{R} {progress_cells(pct / 100, bw)} {TXT}{pct:>3}%{R}"
+            for name, pct in rows]
 
 
-def _current_value_str(name: str, kind: str) -> str:
-    v = getattr(cfg, name)
-    if kind == "bool":
-        return "1" if v else "0"
-    if name == "DURATION_CLASSES":
-        # Serialise back to _parse_duration_classes()'s own spec grammar.
-        return ",".join(
-            f"{c.name}:{c.min_s}-{c.max_s}:{c.folder}:{c.quality}" + (":dedup" if c.dedup else "")
-            for c in v
-        )
-    if isinstance(v, list):
-        return " ".join(v)
-    return str(v)
+def _recent_lines(inner: int) -> list:
+    if not cfg.RIPLOG.exists():
+        return [f"{DIM}nothing yet{R}"]
+    lines = []
+    for ln in cfg.RIPLOG.read_text().splitlines()[-5:]:
+        color = MUTE
+        if "OK    " in ln:
+            color = PRIMARY
+        elif "FAIL  " in ln:
+            color = FAIL
+        elif "START " in ln:
+            color = TXT
+        elif "SKIP  " in ln:
+            color = DIM
+        lines.append(f"{color}{truncate_text(ln[11:], inner)}{R}")
+    return lines
 
 
-def _apply_live(name: str, kind: str, new: str) -> None:
-    """Apply a changed setting to this running `watch` at once. The daemons
-    read settings only at startup, so they need restarting to see it."""
-    if name == "LIBRARY":
-        cfg.use_library(Path(new).expanduser())
-    elif kind == "path":
-        setattr(cfg, name, Path(new))
-    elif name == "DEINTERLACE_ARGS":
-        setattr(cfg, name, new.split())
-    elif kind == "bool":
-        setattr(cfg, name, new == "1")
-    elif kind == "int":
-        setattr(cfg, name, int(new))
-    elif name == "ACCENT":
-        cfg.ACCENT = new
-        ui.set_accent(new)
-    elif name == "DURATION_CLASSES":
-        setattr(cfg, name, cfg._parse_duration_classes(new))
+def render() -> list:
+    """One frame: the overview, what's ripping, what's encoding and the latest
+    rip events, each in its own box. Short of rows, Recent goes first, then
+    the overview, then Encoding."""
+    global FRAMES
+    now = time.time()
+    width = content_width()
+    inner = max(1, width - 4)
+
+    ripped, queued, encd = (count_entries(d) for d in (cfg.DONEDIR, cfg.QUEUE, cfg.ENCDONE))
+    if FRAMES % 15 == 0 or not _folder_counts:
         _folder_counts.clear()
-    else:
-        setattr(cfg, name, new)
+        _folder_counts.update(class_file_counts())
+    counts = " · ".join([f"queue {queued}", f"done {encd}", *(f"{f} {n}" for f, n in _folder_counts.items())])
+    clock = f"{spinner(FRAMES)} {time.strftime('%H:%M:%S')}"
+    ps_out = ps_listing()   # once per frame: reused for every disc and encode below
+    FRAMES += 1
 
-
-def open_settings() -> None:
-    from backbone.prompt import select, text, confirm, keys_editor
-
-    while True:
-        rows = [f"{label}  ({_current_value_str(name, kind)})" for name, kind, label in cfg.SETTINGS]
-        changed = sum(keys.changed(a.id) for a in keys.actions())
-        bindings = f"Key bindings…  ({changed} changed)" if changed else "Key bindings…  (default)"
-        choice = select("backcrack settings", rows + ["+ add a labels.map entry", bindings])
-        if choice is None:
-            return
-        if choice == "+ add a labels.map entry":
-            _add_label_entry()
-            continue
-        if choice == bindings:
-            keys_editor()
-            continue
-        name, kind, label = cfg.SETTINGS[rows.index(choice)]
-        cur = _current_value_str(name, kind)
-        if kind == "bool":
-            new = "1" if confirm(label, default=(cur == "1")) else "0"
-        else:
-            entered = text(f"{label}  [{name}]", default=cur)
-            if entered is None:
-                continue
-            if kind == "int" and not entered.strip().lstrip("-").isdigit():
-                continue
-            if kind == "accent" and ui.accent_code(entered.strip()) is None:
-                continue                       # not a preset name or #RRGGBB
-            entered = entered.strip() if kind == "accent" else entered
-            new = entered
-        cfg.save_setting(name, new)
-        _apply_live(name, kind, new)
-
-
-def _add_label_entry() -> None:
-    """labels.map's manual escape hatch, from inside watch() instead of a
-    text editor: pick (or type) a disc label, then fill in whatever %tokens%
-    the active pattern needs. See pattern.py's lookup_override()."""
-    from backbone.prompt import select, text, confirm
-
-    unsorted = cfg.LIBRARY / "UNSORTED"
-    pending = sorted(p.name for p in unsorted.iterdir()) if unsorted.is_dir() else []
-    manual = "(type a label manually)"
-    label = select("Which disc?", pending + [manual]) if pending else manual
-    if label is None:
-        return
-    if label == manual:
-        label = text("Disc label, exactly as the log has it")
-    if not label:
-        return
-
-    audio = confirm("Is it an audio disc rather than video?", default=False)
-    pattern = cfg.PATTERN_AUDIO if audio else cfg.PATTERN_VIDEO
-    pairs = []
-    for tok in re.findall(r"%([a-zA-Z0-9_]+)%", pattern):
-        val = text(f"{tok} =")
-        if val:
-            pairs.append(f"{tok}={val}")
-    if not pairs:
-        return
-    with open(cfg.LABELS_MAP, "a") as f:
-        f.write(f"{label}|{','.join(pairs)}\n")
+    return _stack([
+        (2, f"backcrack · {cfg.LIBRARY.name} · {cfg.RIP_MODE}", border_right(clock, True),
+         _overview_lines(now, ripped, inner), False),
+        (0, "Ripping", "", _ripping_lines(now, ps_out, inner), False),
+        (1, "Encoding", border_right(counts, None), _encoding_lines(ps_out, inner), False),
+        (3, "Recent", "", _recent_lines(inner), True),
+    ], chrome_room(_hints()), width)
 
 
 keys.define("watch", "Watch", [
@@ -406,6 +336,7 @@ keys.define("watch", "Watch", [
 def _on_key(key: str) -> None:
     if keys.pressed(key, "watch.settings"):
         open_settings()
+        _folder_counts.clear()          # the duration classes may have changed
 
 
 def _prompt_stop_daemons() -> None:
@@ -417,10 +348,12 @@ def _prompt_stop_daemons() -> None:
 
 
 def main() -> None:
+    NAV_STACK.clear()       # one screen: nothing to say where you are
     if os.environ.get("ONESHOT"):
         print("\n".join(render()))
         return
-    run_dashboard(render, interval=INTERVAL, quit_action="watch.quit", on_quit=_prompt_stop_daemons, on_key=_on_key)
+    run_dashboard(render, interval=INTERVAL, quit_action="watch.quit", on_quit=_prompt_stop_daemons,
+                  on_key=_on_key, hints=_hints)
 
 
 if __name__ == "__main__":

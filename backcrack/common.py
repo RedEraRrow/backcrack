@@ -3,6 +3,7 @@ import json
 import subprocess
 
 from backbone.files import log_line
+from backbone.log import log as diag
 from backbone.notify import ntfy
 from backbone.procs import find_processes, spawn_module, stop_processes
 
@@ -71,15 +72,18 @@ def hb_json(input_path: str) -> dict:
             [cfg.HBCLI, "-i", input_path, "--title", "0", "--scan", "--json"],
             capture_output=True, text=True, timeout=120,
         ).stdout
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired) as e:
+        diag.warning("HandBrake scan of %s failed: %s", input_path, e)
         return {}
     marker = "JSON Title Set:"
     idx = out.find(marker)
     if idx < 0:
+        diag.warning("HandBrake scan of %s gave no title set", input_path)
         return {}
     try:
         return json.loads(out[idx + len(marker):])
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        diag.warning("HandBrake scan of %s: unreadable JSON: %s", input_path, e)
         return {}
 
 
