@@ -6,8 +6,8 @@ actually in the drive, read from its own volume size.
     watch   ·   ONESHOT=1 watch   ·   NO_COLOR=1 watch
 
 Keys: q quits (and offers to stop ripd, encd and sortd), s opens the
-settings screen. Set TOTAL_DISCS to the number of discs in the run for a
-progress bar and ETA. Growth history and disc-size calibration live in
+settings screen. Set TOTAL_DISCS to the number of discs LIBRARY is to hold
+for a progress bar and ETA. Growth history and disc-size calibration live in
 memory for the life of the process.
 """
 import os
@@ -174,22 +174,29 @@ def _stack(boxes: list, room: int, width: int) -> list:
     return out
 
 
-def _eta(now: float, ripped: int) -> str:
-    if ripped <= 0 or not cfg.RIPLOG.exists():
-        return "calculating"
-    first_start = None
-    for ln in cfg.RIPLOG.read_text().splitlines():
-        if "START" in ln:
+_BREAK_S = 3 * 3600      # a longer gap between finished discs is a break (overnight), not ripping
+_PACE_DISCS = 10         # the ETA's pace: the gaps between this many of the latest finished discs
+
+
+def _eta(log_lines: list, ripped: int) -> str:
+    """Time left for TOTAL_DISCS at the recent pace: the mean gap between
+    the latest finished discs (several drives at once show as shorter gaps),
+    leaving out breaks."""
+    remaining = TOTAL_DISCS - ripped
+    if remaining <= 0:
+        return "all ripped"
+    done = []
+    for ln in log_lines:
+        if ln[21:27] == "OK    ":
             try:
-                first_start = time.mktime(time.strptime(ln[:19], "%Y-%m-%d %H:%M:%S"))
+                done.append(time.mktime(time.strptime(ln[:19], "%Y-%m-%d %H:%M:%S")))
             except ValueError:
                 pass
-            break
-    elapsed_h = (now - first_start) / 3600 if first_start else 0
-    if elapsed_h <= 0:
+    gaps = [b - a for a, b in zip(done, done[1:]) if b - a < _BREAK_S][-_PACE_DISCS:]
+    if not gaps:
         return "calculating"
-    remaining = (TOTAL_DISCS - ripped) / (ripped / elapsed_h)
-    return f"{int(remaining)}h{int((remaining - int(remaining)) * 60):02d}m left"
+    mins = int(remaining * sum(gaps) / len(gaps) / 60)
+    return f"{mins // 60}h{mins % 60:02d}m left"
 
 
 def _first_fitting(options: list, room: int) -> str:
@@ -197,12 +204,12 @@ def _first_fitting(options: list, room: int) -> str:
     return next((o for o in options if visual_len(o) <= room), options[-1])
 
 
-def _overview_lines(now: float, ripped: int, inner: int) -> list:
+def _overview_lines(log_lines: list, ripped: int, inner: int) -> list:
     """Discs and Disk, each giving up whole parts from its end when short of room."""
     if TOTAL_DISCS > 0:
-        pct = ripped * 100 // TOTAL_DISCS
+        pct = min(100, ripped * 100 // TOTAL_DISCS)
         count = f" {B}{ripped}{R}/{TOTAL_DISCS}"
-        tail = _first_fitting([f"{count}  {TXT}{pct}%{R}  {MUTE}{_eta(now, ripped)}{R}",
+        tail = _first_fitting([f"{count}  {TXT}{pct}%{R}  {MUTE}{_eta(log_lines, ripped)}{R}",
                                f"{count}  {TXT}{pct}%{R}", count], inner - 7 - 4)
         bw = max(4, min(40, inner - 7 - visual_len(tail)))
         discs = f"{MUTE}Discs{R}  {progress_cells(pct / 100, bw)}{tail}"
@@ -282,11 +289,11 @@ def _encoding_lines(ps_out: str, inner: int) -> list:
             for name, pct in rows]
 
 
-def _recent_lines(inner: int) -> list:
-    if not cfg.RIPLOG.exists():
+def _recent_lines(log_lines: list, inner: int) -> list:
+    if not log_lines:
         return [f"{DIM}nothing yet{R}"]
     lines = []
-    for ln in cfg.RIPLOG.read_text().splitlines()[-5:]:
+    for ln in log_lines[-5:]:
         color = MUTE
         if "OK    " in ln:
             color = PRIMARY
@@ -316,14 +323,15 @@ def render() -> list:
     counts = " · ".join([f"queue {queued}", f"done {encd}", *(f"{f} {n}" for f, n in _folder_counts.items())])
     clock = f"{spinner(FRAMES)} {time.strftime('%H:%M:%S')}"
     ps_out = ps_listing()   # once per frame: reused for every disc and encode below
+    log_lines = cfg.RIPLOG.read_text().splitlines() if cfg.RIPLOG.exists() else []
     FRAMES += 1
 
     return _stack([
         (2, f"backcrack · {cfg.LIBRARY.name} · {cfg.RIP_MODE}", border_right(clock, True),
-         _overview_lines(now, ripped, inner), False),
+         _overview_lines(log_lines, ripped, inner), False),
         (0, "Ripping", "", _ripping_lines(now, ps_out, inner), False),
         (1, "Encoding", border_right(counts, None), _encoding_lines(ps_out, inner), False),
-        (3, "Recent", "", _recent_lines(inner), True),
+        (3, "Recent", "", _recent_lines(log_lines, inner), True),
     ], chrome_room(_hints()), width)
 
 

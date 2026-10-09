@@ -8,9 +8,26 @@ stop and restart - finished files are never redone.
 import time
 from pathlib import Path
 
+from backbone.log import log as diag
+
 from backcrack import config as cfg
-from backcrack.encode import audio_ext, process_job
-from backcrack.common import log
+from backcrack.encode import audio_ext, process_job, set_aside
+from backcrack.common import log, notify
+
+
+def run_queue() -> int:
+    """One pass over the queue, returning how many jobs ran. A job that
+    raises is set aside (encode.set_aside) and pushed, and the rest carry on."""
+    ran = 0
+    for jobfile in sorted(p for p in cfg.QUEUE.iterdir() if p.is_file()):
+        try:
+            process_job(jobfile)
+            ran += 1
+        except Exception as e:
+            diag.exception("encode job %s crashed", jobfile.name)
+            set_aside(jobfile, f"{type(e).__name__}: {e}")
+            notify(f"backcrack - {jobfile.name} not encoded", f"{type(e).__name__}: {e}", "high", "warning")
+    return ran
 
 
 def main() -> None:
@@ -29,10 +46,7 @@ def main() -> None:
 
     try:
         while True:
-            jobfiles = [p for p in cfg.QUEUE.iterdir() if p.is_file()]
-            for jobfile in jobfiles:
-                process_job(jobfile)
-            if not jobfiles:
+            if not run_queue():
                 time.sleep(15)
     except KeyboardInterrupt:
         print("\nencoder stopped - queue kept in", cfg.QUEUE)

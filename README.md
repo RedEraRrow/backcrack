@@ -220,6 +220,11 @@ and it'll ask whether to also stop the daemons.)
 - A file already encoded is skipped. An encode is written as
   `<name>.part.mkv` and renamed when HandBrake finishes, so an interrupted
   one is redone rather than kept half-written.
+- A disc that didn't fully encode (an encode failed, HandBrake is missing,
+  or the job couldn't be read) isn't marked done: its job is set aside as
+  `$LIBRARY/.ripstate/failed-<label>`, with a push, and encd carries on with
+  the next. Move it back into `.ripstate/queue/` to try again; what already
+  encoded is skipped.
 
 Before finishing, check for failures:
 
@@ -267,7 +272,7 @@ The ones not covered elsewhere in this README:
 | `ACCENT` | `green` | the accent colour: `green`, `red`, `yellow`, `blue`, `magenta`, `cyan` (your terminal's own), `amber`, `coral`, `rose`, `lavender`, `sky`, `mint`, or `#RRGGBB` |
 | `WATCH_INTERVAL` | `1` | seconds between `watch` refreshes |
 | `SORT_INTERVAL` | `5` | seconds between `sortd` passes |
-| `TOTAL_DISCS` | `0` | discs in this run; shows a progress bar and ETA in `watch` (0 hides them) |
+| `TOTAL_DISCS` | `0` | discs `LIBRARY` is to hold, counting the ones already in it; shows a progress bar and ETA in `watch` (0 hides them). The ETA is the pace of the last ten discs, leaving out breaks of three hours or more |
 | `WINDOW`, `ACTIVE_S`, `FALLBACK_KB` | `20`, `90`, `7340032` | `watch`: seconds behind its MB/s figure, how long an idle rip stays listed, disc size (KB) assumed until the real one is known |
 | `READ_MB`, `SKIP_MB`, `STALL_S`, `DISC_BYTES`, `RESULTS` | `600`, `1000`, `60`, `7000000000`, `~/diskspeed.txt` | `diskspeed`: MB read per drive, MB skipped first, seconds without progress before giving up, disc size behind its minutes-per-disc estimate, results file |
 

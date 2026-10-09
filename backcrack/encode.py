@@ -1,8 +1,11 @@
 """Turn a ripped disc's source/ into encoded/ (and extras/ for
 video). Shared by encd.py.
 """
+import os
 import subprocess
 from pathlib import Path
+
+from backbone.log import log as diag
 
 from backcrack import config as cfg
 from backcrack.common import log, notify, classify_class, hb_titles, file_duration
@@ -14,16 +17,22 @@ PART = ".part"   # an encode in progress is written as <stem>.part<suffix>
 def _encode_to(out: Path, cmd_for, log_path: Path) -> int:
     """Runs cmd_for(tmp) to write `out` under a temporary name, renaming it to
     `out` only once the command succeeds, so an interrupted encode never
-    leaves a file that looks finished."""
-    out.parent.mkdir(parents=True, exist_ok=True)
+    leaves a file that looks finished. Returns the exit code, -1 when the
+    command couldn't be run at all (the encoder missing, a folder unwritable)."""
     tmp = out.with_name(out.stem + PART + out.suffix)
-    with open(log_path, "ab") as logf:
-        rc = subprocess.run(cmd_for(tmp), stdout=logf, stderr=subprocess.STDOUT, timeout=None).returncode
+    try:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "ab") as logf:
+            rc = subprocess.run(cmd_for(tmp), stdout=logf, stderr=subprocess.STDOUT, timeout=None).returncode
+        why = f"rc={rc}"
+    except OSError as e:
+        rc, why = -1, str(e)
+        diag.warning("encode of %s couldn't run: %s", out, e)
     if rc == 0 and tmp.exists():
         tmp.replace(out)
     else:
         tmp.unlink(missing_ok=True)
-        log(cfg.ENCLOG, f"FAIL  {out.name} (rc={rc}) - see {log_path}")
+        log(cfg.ENCLOG, f"FAIL  {out.name} ({why}) - see {log_path}")
     return rc
 
 
@@ -51,26 +60,38 @@ def audio_ext() -> str:
     return "wav"
 
 
-def encode_audio_one(src: Path, out: Path) -> None:
+def encode_audio_one(src: Path, out: Path) -> int:
     def cmd_for(tmp: Path) -> list:
         if cfg.FLAC and cfg.AUDIO_FORMAT == "flac":
             return [cfg.FLAC, "-s", "-f", "-o", str(tmp), str(src)]
         if cfg.FFMPEG:
             return [cfg.FFMPEG, "-y", "-i", str(src), "-c:a", cfg.AUDIO_FORMAT, str(tmp)]
         return ["cp", str(src), str(tmp)]
-    _encode_to(out, cmd_for, cfg.LOGDIR / f"{out.name}.enc.log")
+    return _encode_to(out, cmd_for, cfg.LOGDIR / f"{out.name}.enc.log")
 
 
-def _run_batched(jobs, worker) -> None:
+def _run_batched(jobs, worker) -> int:
     """Runs `worker(job)` for each job, ENCODE_JOBS at a time in the
     background, waiting for each batch before starting the next - matches
     HandBrake's own single-threaded-per-process model, so ENCODE_JOBS
     processes run in parallel rather than one process trying to use them all.
+    Returns how many failed (a nonzero exit code, or an error).
     """
     import threading
+    failed = []
+
+    def run(job) -> None:
+        try:
+            rc = worker(job)
+        except Exception:
+            diag.exception("encode job %s crashed", job)
+            rc = -1
+        if rc != 0:
+            failed.append(job)
+
     batch = []
     for job in jobs:
-        t = threading.Thread(target=worker, args=(job,))
+        t = threading.Thread(target=run, args=(job,))
         t.start()
         batch.append(t)
         if len(batch) >= cfg.ENCODE_JOBS:
@@ -79,9 +100,15 @@ def _run_batched(jobs, worker) -> None:
             batch = []
     for t in batch:
         t.join()
+    return len(failed)
 
 
-def process_video_job(label: str, dest: Path) -> None:
+def process_video_job(label: str, dest: Path) -> int:
+    """Encode a video disc's titles by duration class; returns how many failed.
+    Raises when HandBrake isn't there: its scans would find nothing, and the
+    disc would pass for one with nothing worth encoding."""
+    if not os.access(cfg.HBCLI, os.X_OK):
+        raise FileNotFoundError(f"HandBrakeCLI not found at {cfg.HBCLI} (see `backcrack doctor`)")
     counts = {c.name: 0 for c in cfg.DURATION_CLASSES}
     n_already = 0
     seen = {c.name: set() for c in cfg.DURATION_CLASSES if c.dedup}
@@ -117,12 +144,12 @@ def process_video_job(label: str, dest: Path) -> None:
                 continue
             log(cfg.ENCLOG, f"  ->   {label} t{idx}  {secs // 60}m  {cls.name}  -> {outdir.name}/{out.name}")
             jobs.append((str(video_ts), idx, out, cls.quality))
-        _run_batched(jobs, lambda j: encode_video_one(*j))
+        n_failed = _run_batched(jobs, lambda j: encode_video_one(*j))
     else:
         src = dest / "source"
         if not src.is_dir():
             log(cfg.ENCLOG, f"no source/ in {dest}")
-            return
+            return 0
         jobs = []
         for f in sorted(src.glob("*.mkv")):
             secs = file_duration(str(f))
@@ -137,23 +164,22 @@ def process_video_job(label: str, dest: Path) -> None:
                 continue
             log(cfg.ENCLOG, f"  ->   {f.name}  {secs // 60}m  {cls.name}  -> {outdir.name}/")
             jobs.append((str(f), None, out, cls.quality))
-        _run_batched(jobs, lambda j: encode_video_one(*j))
+        n_failed = _run_batched(jobs, lambda j: encode_video_one(*j))
 
     if sum(counts.values()) + n_already == 0:
         log(cfg.ENCLOG, f"WARN  {label} - nothing encodable found. Check {cfg.LOGDIR}/")
         notify(f"backcrack - {label} nothing found", "No titles matched a duration class.", "high", "warning")
     else:
         breakdown = ", ".join(f"{n} {name}" for name, n in counts.items() if n) or "nothing new"
-        log(cfg.ENCLOG, f"DONE  {label} - {breakdown}, {n_already} already present")
-        if cfg.NOTIFY_ENCODES:
-            notify(f"backcrack - {label} encoded", breakdown, "low", "film_projector")
+        _report_done(label, f"{breakdown}, {n_already} already present", n_failed)
+    return n_failed
 
 
-def process_audio_job(label: str, dest: Path) -> None:
+def process_audio_job(label: str, dest: Path) -> int:
     src = dest / "source"
     if not src.is_dir():
         log(cfg.ENCLOG, f"no source/ in {dest}")
-        return
+        return 0
 
     n_done = n_skip = 0
     jobs = []
@@ -167,15 +193,25 @@ def process_audio_job(label: str, dest: Path) -> None:
         log(cfg.ENCLOG, f"  ->   {f.name}  -> encoded/{out.name}")
         jobs.append((f, out))
         n_done += 1
-    _run_batched(jobs, lambda j: encode_audio_one(*j))
+    n_failed = _run_batched(jobs, lambda j: encode_audio_one(*j))
 
     if n_done + n_skip == 0:
         log(cfg.ENCLOG, f"WARN  {label} - no tracks found in source/. Check {cfg.LOGDIR}/")
         notify(f"backcrack - {label} nothing found", "No tracks in source/.", "high", "warning")
     else:
-        log(cfg.ENCLOG, f"DONE  {label} - {n_done} tracks, {n_skip} already present")
+        _report_done(label, f"{n_done} tracks, {n_skip} already present", n_failed)
+    return n_failed
+
+
+def _report_done(label: str, summary: str, n_failed: int) -> None:
+    """A finished job's DONE line and push, saying how many encodes failed."""
+    if n_failed:
+        log(cfg.ENCLOG, f"DONE  {label} - {summary}, {n_failed} FAILED (see the FAIL lines above)")
+        notify(f"backcrack - {label}: {n_failed} encodes failed", summary, "high", "warning")
+    else:
+        log(cfg.ENCLOG, f"DONE  {label} - {summary}")
         if cfg.NOTIFY_ENCODES:
-            notify(f"backcrack - {label} encoded", f"{n_done} tracks", "low", "film_projector")
+            notify(f"backcrack - {label} encoded", summary, "low", "film_projector")
 
 
 def process_job(jobfile: Path) -> None:
@@ -190,9 +226,21 @@ def process_job(jobfile: Path) -> None:
 
     dest = Path(dest_s)
     log(cfg.ENCLOG, f"ENCODE {label} ({kind})")
-    if kind == "audio":
-        process_audio_job(label, dest)
-    else:
-        process_video_job(label, dest)
+    n_failed = process_audio_job(label, dest) if kind == "audio" else process_video_job(label, dest)
+    if n_failed:
+        set_aside(jobfile, f"{n_failed} encodes failed")
+        return
     (cfg.ENCDONE / label).touch()
     jobfile.unlink(missing_ok=True)
+
+
+def set_aside(jobfile: Path, why: str) -> None:
+    """Take a job that didn't fully encode out of the queue, as
+    .ripstate/failed-<name>: moving it back into queue/ redoes what's missing
+    (finished files are skipped)."""
+    aside = cfg.STATE / f"failed-{jobfile.name}"
+    try:
+        jobfile.replace(aside)
+    except OSError as e:
+        diag.warning("couldn't set %s aside: %s", jobfile, e)   # stays queued: retried next pass
+    log(cfg.ENCLOG, f"FAIL  job {jobfile.name} - {why}; set aside as {aside.name}, move it back to queue/ to retry")

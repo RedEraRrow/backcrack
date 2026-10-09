@@ -40,6 +40,33 @@ class StackTest(unittest.TestCase):
         self.assertEqual(watch._stack([box(0, "A", 1)], 2, 30), [])
 
 
+def ok(stamp: str) -> str:
+    return f"2026-10-0{stamp}  OK    D -> Season 1/Disc 1  20m  7.1GB [1 done]"
+
+
+class EtaTest(unittest.TestCase):
+    def eta(self, lines, ripped, total=10):
+        with patch.object(watch, "TOTAL_DISCS", total):
+            return watch._eta(lines, ripped)
+
+    def test_recent_pace(self):
+        lines = [ok("1 10:00:00"), ok("1 10:30:00"), ok("1 11:00:00")]     # one every 30 min
+        self.assertEqual(self.eta(lines, 3), "3h30m left")                  # 7 to go
+
+    def test_breaks_dont_count(self):
+        lines = [ok("1 22:00:00"), ok("2 09:00:00"), ok("2 09:20:00")]     # overnight, then 20 min
+        self.assertEqual(self.eta(lines, 3), "2h20m left")
+
+    def test_two_drives_go_twice_as_fast(self):
+        lines = [ok("1 10:00:00"), ok("1 10:05:00"), ok("1 10:30:00"), ok("1 10:35:00"), ok("1 11:00:00")]
+        self.assertEqual(self.eta(lines, 5), "1h15m left")                  # mean gap 15 min, 5 to go
+
+    def test_until_two_discs_finish_or_after_the_last(self):
+        self.assertEqual(self.eta([ok("1 10:00:00")], 1), "calculating")
+        self.assertEqual(self.eta([], 10), "all ripped")
+        self.assertEqual(self.eta([], 12), "all ripped")
+
+
 class FrameTest(unittest.TestCase):
     """A rip and an encode under way, drawn at a range of window sizes."""
 

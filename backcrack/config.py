@@ -199,7 +199,7 @@ LAUNCH_WATCH = _env("LAUNCH_WATCH", "1") == "1"
 # WATCH_INTERVAL and SORT_INTERVAL fall back to a plain INTERVAL if one is set.
 WATCH_INTERVAL = float(_env("WATCH_INTERVAL", _env("INTERVAL", "1")))
 SORT_INTERVAL = _env_int("SORT_INTERVAL", int(_env("INTERVAL", "5")))
-TOTAL_DISCS = _env_int("TOTAL_DISCS", 0)       # discs in this run; 0 hides the percentage and ETA
+TOTAL_DISCS = _env_int("TOTAL_DISCS", 0)       # discs this LIBRARY is to hold; 0 hides the percentage and ETA
 WINDOW = _env_int("WINDOW", 20)                # seconds of history behind watch's MB/s figure
 ACTIVE_S = _env_int("ACTIVE_S", 90)            # a source/ idle this long drops out of RIPPING
 FALLBACK_KB = _env_int("FALLBACK_KB", 7340032)  # disc size assumed until diskutil reports it

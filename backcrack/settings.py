@@ -57,6 +57,9 @@ _ROWS = {name: (kind, label, note) for _section, rows in SECTIONS for name, kind
 _TOGGLES = {name for name, (kind, _l, _n) in _ROWS.items() if kind == "bool"}
 _LEAST = {"MIN_TITLE_S": 0}            # every other number is at least 1
 _WATCH_ONLY = {"ACCENT", "LAUNCH_RIPD", "LAUNCH_ENCD", "LAUNCH_SORTD", "LAUNCH_WATCH"}
+# The key groups of the screens backcrack opens: watch, and the lists, searches
+# and questions of this screen. Key bindings lists only these.
+_KEY_SCOPES = ["watch", "global", "list", "search", "confirm"]
 
 
 def saved_value(name: str) -> str:
@@ -234,6 +237,6 @@ def open_settings() -> None:
         elif choice == "__help__":
             prompt.set_help_toggle_shown(not prompt.help_toggle_shown())
         elif choice == "__keys__":
-            prompt.keys_editor()
+            prompt.keys_editor(_KEY_SCOPES)
         else:
             _edit(choice)
